@@ -43,6 +43,21 @@
       button.link { background: none; color: var(--muted); width: auto; padding: 8px 0; margin: 0; font-weight: 500; }
       button.danger { background: transparent; color: var(--danger); border: 1px solid #4a2c29; }
       button:disabled { opacity: 0.5; }
+      button.done { background: var(--ok); }
+      select {
+        appearance: none; -webkit-appearance: none; background-color: var(--bg); color: var(--text);
+        background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+        background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 36px;
+      }
+      option { background: var(--surface); color: var(--text); }
+      details.pick { border-top: 1px solid var(--line); }
+      details.pick:first-of-type { border-top: 0; }
+      details.pick summary { display: flex; justify-content: space-between; align-items: center; padding: 13px 0; cursor: pointer; list-style: none; font-size: 15px; }
+      details.pick summary::-webkit-details-marker { display: none; }
+      details.pick summary::after { content: "›"; color: var(--muted); margin-left: 10px; transition: transform .15s; }
+      details.pick[open] summary::after { transform: rotate(90deg); }
+      details.pick .count { margin-left: auto; color: var(--muted); font-size: 13px; }
+      details.pick[open] { padding-bottom: 8px; }
       .row { display: flex; gap: 10px; }
       .row > * { flex: 1; }
       .lens {

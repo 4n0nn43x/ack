@@ -20,6 +20,7 @@ export interface Handlers {
   demo(): void
   leave(): void
   save(): void
+  applied(): void // settings changed: pick up chats that were just followed
 }
 
 export interface Pick { id: number; name: string }
@@ -127,34 +128,47 @@ export class Phone {
   settings(who: string, chats: Pick[], groups: Pick[], bots: Pick[]) {
     const el = $(this.root, '#settings')
     el.hidden = false
-    const checks = (list: Pick[], picked: number[], attr: string, empty: string) => list.length
-      ? list.slice(0, 40).map(c => `<label class="check"><input type="checkbox" data-${attr}="${c.id}" ${picked.includes(c.id) ? 'checked' : ''}>${esc(c.name)}</label>`).join('')
-      : `<p class="empty">${empty}</p>`
+    // A long list folds into one line that says how many are picked.
+    const picker = (title: string, list: Pick[], picked: number[], attr: string, empty: string) => {
+      const n = list.filter(c => picked.includes(c.id)).length
+      const rows = list.length
+        ? list.slice(0, 60).map(c => `<label class="check"><input type="checkbox" data-${attr}="${c.id}" ${picked.includes(c.id) ? 'checked' : ''}>${esc(c.name)}</label>`).join('')
+        : `<p class="empty">${empty}</p>`
+      return `<details class="pick"><summary><span>${title}</span><span class="count" data-count="${attr}">${n ? `${n} picked` : 'none'}</span></summary>${rows}</details>`
+    }
     el.innerHTML = `
       <h2>Settings</h2>
       <p class="hint">${esc(who)}</p>
-      <label>People whose messages come to the glasses</label>
-      ${checks(chats, this.s.people, 'person', 'Chats show up here once Telegram is connected.')}
-      <label>Groups and channels whose messages come to the glasses</label>
-      ${checks(groups, this.s.groups, 'group', 'Groups show up here once Telegram is connected.')}
+      ${picker('People', chats, this.s.people, 'person', 'Chats show up here once Telegram is connected.')}
+      ${picker('Groups and channels', groups, this.s.groups, 'group', 'Groups show up here once Telegram is connected.')}
+      ${picker('Bots that skip the 1.5 s undo', bots, this.s.instant, 'bot', 'No bots yet.')}
       <label for="replies">Quick replies to people, one per line</label>
       <textarea id="replies">${esc(this.s.replies.join('\n'))}</textarea>
-      <label>Bots that skip the 1.5 s undo</label>
-      ${checks(bots, this.s.instant, 'bot', 'No bots yet.')}
       <label for="prov">Voice answers (hold on the glasses, speak, release)</label>
       <select id="prov">${Object.entries(PROVIDERS).map(([k, p]) => `<option value="${k}" ${k === this.s.voice.provider ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
       <input id="vkey" type="password" placeholder="Your speech API key" value="${esc(this.s.voice.key)}" style="margin-top:8px">
       <p class="hint">Stays on this phone. Audio goes from your phone to that service only while you hold.</p>
       <button id="save">Save settings</button>
       <button id="leave" class="danger">${this.s.mode === 'demo' ? 'Leave the demo' : 'Sign out of Telegram'}</button>`
-    $(el, '#save').onclick = () => {
-      this.s.people = [...el.querySelectorAll<HTMLInputElement>('[data-person]')].filter(i => i.checked).map(i => Number(i.dataset.person))
-      this.s.groups = [...el.querySelectorAll<HTMLInputElement>('[data-group]')].filter(i => i.checked).map(i => Number(i.dataset.group))
-      this.s.instant = [...el.querySelectorAll<HTMLInputElement>('[data-bot]')].filter(i => i.checked).map(i => Number(i.dataset.bot))
+    const picked = (attr: string) => [...el.querySelectorAll<HTMLInputElement>(`[data-${attr}]`)].filter(i => i.checked).map(i => Number(i.getAttribute(`data-${attr}`)))
+    el.onchange = e => {
+      const attr = ['person', 'group', 'bot'].find(a => (e.target as HTMLElement).hasAttribute?.(`data-${a}`))
+      if (!attr) return
+      const n = picked(attr).length
+      $(el, `[data-count="${attr}"]`).textContent = n ? `${n} picked` : 'none'
+    }
+    const save = $<HTMLButtonElement>(el, '#save')
+    save.onclick = () => {
+      this.s.people = picked('person')
+      this.s.groups = picked('group')
+      this.s.instant = picked('bot')
       this.s.replies = $<HTMLTextAreaElement>(el, '#replies').value.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 6)
       this.s.voice = { provider: $<HTMLSelectElement>(el, '#prov').value as Provider, key: $<HTMLInputElement>(el, '#vkey').value.trim() }
       this.h.save()
-      this.status('Saved', 'live')
+      this.h.applied()
+      save.textContent = 'Saved'
+      save.classList.add('done')
+      setTimeout(() => { save.textContent = 'Save settings'; save.classList.remove('done') }, 1600)
     }
     $(el, '#leave').onclick = () => this.h.leave()
   }

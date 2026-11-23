@@ -26,6 +26,7 @@ const phone = new Phone(document.getElementById('app')!, saved, {
   demo: () => startDemo(),
   leave: () => void leave(),
   save,
+  applied: () => { if (src?.kind === 'telegram') void src.scan() },
 }, Boolean(ENV_ID && ENV_HASH))
 phone.log(log)
 phone.stats(lat)
