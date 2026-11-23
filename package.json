@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "pack": "npm run build && evenhub pack app.json dist -o ack.ehpk --sdk-ver 0.0.16",
     "simulate": "evenhub-simulator http://localhost:5173",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node scripts/e2e.mjs",
+    "verify": "tsc --noEmit && vitest run && vite build"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.16",

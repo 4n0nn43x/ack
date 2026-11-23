@@ -7,6 +7,8 @@ import { Phone, type Saved } from './phone'
 import type { TelegramSource } from './telegram'
 import { transcribe } from './voice'
 
+if (new URLSearchParams(location.search).has('fresh')) { try { localStorage.clear() } catch { /* nothing to clear */ } } // clean start for tests
+
 const load = <T>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? (JSON.parse(v) as T) : d } catch { return d } }
 const store = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private mode: keep going */ } }
 
@@ -32,7 +34,11 @@ const bridge = await waitForEvenAppBridge()
 const glasses = new Glasses(bridge)
 
 const app = new App({
-  draw: (page, force) => { phone.mirror(page); return glasses.draw(page, force) },
+  draw: (page, force) => {
+    phone.mirror(page)
+    console.log(`[ack] lens ${page.texts.map(t => t.text.replace(/\n+/g, ' / ')).join(' | ')}${page.list ? ` | ${page.list.items.join(' · ')}` : ''}`)
+    return glasses.draw(page, force)
+  },
   exit: () => void glasses.exit(),
   now: () => Date.now(),
   perf: () => performance.now(),
