@@ -350,3 +350,30 @@ describe('voice', () => {
     expect(sent).toEqual(['1:running 5 minutes late'])
   })
 })
+
+describe('Gram wallet on the lens', () => {
+  const w = { balance: '142.75', address: 'UQBpx4qZr8vN0n7sHk2xY1cWf3eD9aLmP0tQ9xKa', txs: [
+    { id: 'a', incoming: true, amount: '25', peer: 'Alex', comment: 'Zuma', date: t - 7_200_000, failed: false },
+    { id: 'b', incoming: false, amount: '3.2', peer: 'ston.fi', comment: '', date: t - 86_400_000, failed: false },
+  ] }
+
+  it('the calm lens shows the balance', () => {
+    app.setWallet(w)
+    expect(main()).toBe('Nothing waiting.\n\nGram wallet  142.75 GRAM')
+  })
+
+  it('tap lists the wallet first, then the bots; the wallet page is read only and exact', async () => {
+    app.setWallet(w)
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(last().list!.items).toEqual(['Gram wallet · 142.75 GRAM', '@BotFather'])
+    app.input({ type: 'select', index: 0 })
+    expect(last().texts[0].text).toBe('Gram wallet · read only')
+    expect(main()).toContain('142.75 GRAM   UQBpx4...9xKa')
+    expect(main()).toContain('+25 from Alex · Zuma · 2h')
+    expect(main()).toContain('-3.2 to ston.fi · 1d')
+    app.input({ type: 'double', ring: false })
+    await flush()
+    expect(last().list!.items[0]).toBe('Gram wallet · 142.75 GRAM')
+  })
+})

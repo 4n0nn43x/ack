@@ -1,6 +1,6 @@
 import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { App, errorText, type LogEntry } from './app'
-import { DEFAULT_REPLIES, replies } from './cards'
+import { DEFAULT_REPLIES, replies, type Card } from './cards'
 import { DemoSource } from './demo'
 import { Glasses, parseEvent } from './glasses'
 import { Phone, type Saved } from './phone'
@@ -79,6 +79,22 @@ app.render()
 console.log('[ack] ready')
 setInterval(() => { if (app.view.v === 'card') app.render() }, 30_000) // keeps "2m ago" honest
 
+/** Every card goes to the lens; a Gram wallet event also refreshes the balance. */
+function take(c: Card) {
+  app.upsert(c)
+  if (c.wallet) void refreshWallet()
+}
+
+/** The Gram wallet, read only, on the lens and the phone. Missing wallet or API: both just hide it. */
+async function refreshWallet() {
+  const s = src
+  const w = s?.wallet ? await s.wallet().catch(() => null) : null
+  if (s !== src) return
+  app.setWallet(w)
+  phone.wallet(w)
+}
+setInterval(() => { if (src) void refreshWallet() }, 60_000)
+
 function stop() {
   if (src?.kind === 'demo') src.stop()
   src = null
@@ -92,13 +108,14 @@ function startDemo() {
   stop()
   saved.mode = 'demo'
   save()
-  const d = new DemoSource(c => app.upsert(c), () => replies(saved.replies))
+  const d = new DemoSource(take, () => replies(saved.replies))
   d.onActivity = id => phone.activity(id)
   src = d
   app.setSource(d)
   d.start()
   phone.status('Demo', 'live')
   settingsFor(d)
+  void refreshWallet()
 }
 
 async function startTelegram(firstPhone?: string, qr = false) {
@@ -108,7 +125,7 @@ async function startTelegram(firstPhone?: string, qr = false) {
   stop()
   phone.status('Loading Telegram...')
   const { TelegramSource } = await import('./telegram') // mtcute is heavy: only loaded for a real account
-  const t = new TelegramSource(apiId, apiHash, c => app.upsert(c), k => app.remove(k), () => [...saved.people, ...saved.groups], () => replies(saved.replies))
+  const t = new TelegramSource(apiId, apiHash, take, k => app.remove(k), () => [...saved.people, ...saved.groups], () => replies(saved.replies))
   t.onActivity = id => phone.activity(id)
   src = t
   let pending = firstPhone
@@ -128,6 +145,7 @@ async function startTelegram(firstPhone?: string, qr = false) {
     phone.status(`Connected · ${t.me?.displayName ?? ''}`, 'live')
     await t.scan()
     settingsFor(t)
+    void refreshWallet()
   } catch (e) {
     console.error('[ack] telegram', e)
     phone.status(errorText(e).split('\n')[0], 'warn')
@@ -142,6 +160,7 @@ async function leave() {
   saved.mode = 'none'
   save()
   app.setSource(null)
+  phone.wallet(null)
   phone.status('Signed out')
   phone.signedOut()
 }

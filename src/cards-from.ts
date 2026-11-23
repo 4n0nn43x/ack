@@ -1,5 +1,6 @@
 // A Telegram message to a card (lens) or a bubble (phone). Kept apart from the client so it is tested without a connection.
 import { clean, fromInline, fromReply, type Action, type Card, type RawButton } from './cards'
+import { walletCard, walletLine } from './wallet'
 
 export type ChatKind = 'bot' | 'person' | 'group' | 'channel'
 
@@ -31,6 +32,7 @@ export interface MsgLike {
   markup: { type: string; buttons?: unknown[][] } | null
   media: unknown
   richMessage?: unknown
+  raw?: unknown // the TL message, read for wallet service actions
 }
 
 const nameOf = (p: PeerLike) => (p.isBot ? `@${p.username ?? p.displayName}` : p.displayName)
@@ -48,7 +50,8 @@ export const idScope = (chat: PeerLike): number => (chat.type === 'chat' && chat
  * In groups, replies go back as a reply to the message. Channels are read-only.
  */
 export function cardFrom(m: MsgLike, follow: number[], replies: Action[]): Card | null {
-  if (m.isOutgoing || m.isService) return null
+  if (m.isService) return walletCard(m, Date.now())
+  if (m.isOutgoing) return null
   const privateChat = m.chat.type === 'user'
   const privateBot = privateChat && !!m.chat.isBot
   if (!privateBot && !follow.includes(m.chat.id)) return null
@@ -81,7 +84,8 @@ export function cardFrom(m: MsgLike, follow: number[], replies: Action[]): Card 
 }
 
 /** What a message says in one line, for chat list previews and media-only messages. */
-export function preview(m: Pick<MsgLike, 'text' | 'media' | 'richMessage'>): string {
+export function preview(m: Pick<MsgLike, 'text' | 'media' | 'richMessage'> & Partial<MsgLike>): string {
+  if (m.raw && m.isService) { const w = walletLine(m as MsgLike); if (w) return w }
   const media = (m.media as { type?: string } | null)?.type
   return m.text || (media ? `[${media}]` : m.richMessage ? '[rich message]' : '')
 }
