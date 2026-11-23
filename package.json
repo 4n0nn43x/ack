@@ -23,5 +23,6 @@
     "vite": "^6.4.6",
     "vitest": "^3.2.7"
   },
-  "description": "Every Telegram bot button, one tap on Even G2"
+  "description": "Every Telegram bot button, one tap on Even G2",
+  "license": "MIT"
 }
