@@ -42,6 +42,8 @@ export class TelegramSource implements Source {
       password: () => ui.ask('password'),
       invalidCodeCallback: kind => ui.status(kind === 'code' ? 'Wrong code, try again.' : 'Wrong password, try again.'),
     })
+    this.tg.onConnectionState.add(st => console.log(`[ack] telegram ${st}`))
+    this.tg.onError.add(e => console.error('[ack] telegram error', e))
     this.tg.onNewMessage.add(m => this.take(m))
     this.tg.onEditMessage.add(m => this.take(m))
     this.tg.onDeleteMessage.add(u => { for (const id of u.messageIds) this.dropMsg(id) })
@@ -70,6 +72,7 @@ export class TelegramSource implements Source {
 
   private take(m: Message) {
     const c = cardFrom(m as unknown as MsgLike, this.follow(), this.replies())
+    console.log(`[ack] telegram message ${m.chat.type}${m.chat.type === 'user' && m.chat.isBot ? ' bot' : ''} ${m.isOutgoing ? 'out' : 'in'} markup=${m.markup?.type ?? 'none'} -> ${c ? 'card' : 'skipped'}`)
     if (!c) return
     this.keys.set(c.msgId, c.key)
     this.sink(c)

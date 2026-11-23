@@ -123,7 +123,11 @@ export class Glasses {
     return this.run(async () => {
       if (!this.started) {
         this.started = true
-        return (await this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(toPayload(page)))) === 0
+        const created = await this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(toPayload(page)))
+        console.log(`[ack] startup page: ${created}`)
+        if (created === 0) return true
+        // A page already exists (the WebView was reloaded under a live session): take it over with a rebuild.
+        return this.bridge.rebuildPageContainer(new RebuildPageContainer(toPayload(page)))
       }
       if (!force && prev && layout(prev) === layout(page)) {
         let ok = true
