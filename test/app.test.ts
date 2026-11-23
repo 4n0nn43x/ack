@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { App, UNDO_MS, type Deps, type LogEntry, type Source } from '../src/app'
+import { App, EDIT_WAIT_MS, UNDO_MS, type Deps, type LogEntry, type Source } from '../src/app'
 import type { Action, Card } from '../src/cards'
 import type { Page } from '../src/glasses'
 
@@ -130,15 +130,53 @@ describe('a card', () => {
     expect(pressed).toEqual(['Staging only'])
   })
 
-  it('shows the bot toast in the card header for a moment', async () => {
-    app.upsert(card(1, [act('Ping')]))
+  it('shows the bot toast in the card header when the bot edits its message', async () => {
+    const editing: Source = { ...source, press: async (c, a) => { pressed.push(a.label); app.upsert({ ...c, text: 'Pinged.', actions: [act('Again')] }); return { toast: 'Pong' } } }
+    app.setSource(editing)
     app.settings.instant = [1]
+    app.upsert(card(1, [act('Ping')]))
     app.input({ type: 'select', index: 0 })
     await flush()
     expect(app.view.v).toBe('card')
     expect(last().texts[0]).toMatchObject({ text: '@deploybot · Pong', color: 4 })
+    expect(main()).toContain('Pinged.')
     await tick(2500)
     expect(last().texts[0]).toMatchObject({ text: '@deploybot · now', color: 2 })
+  })
+
+  it('without a reaction from the bot, the card retires so its buttons cannot be pressed twice', async () => {
+    app.settings.instant = [1]
+    app.upsert(card(1, [act('Staging only')]))
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    expect(main()).toContain('▶ Staging only')
+    await tick(EDIT_WAIT_MS)
+    expect(main()).toBe('Sent: Staging only')
+    expect(app.queue).toHaveLength(0)
+    app.upsert(card(1, [act('Staging only')])) // the same message again, e.g. rescanned on the next start
+    expect(app.queue).toHaveLength(0)
+  })
+
+  it('an edit just after the press brings the card back with what the bot wrote', async () => {
+    app.settings.instant = [1]
+    app.upsert(card(1, [act('Staging only')]))
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    app.upsert(card(1, [act('Promote to prod', { style: 'danger' })], 'v2.3.1 is live on staging'))
+    expect(app.view.v).toBe('card')
+    expect(main()).toContain('v2.3.1 is live on staging')
+    await tick(EDIT_WAIT_MS * 2)
+    expect(app.queue).toHaveLength(1)
+  })
+
+  it('an answer sent as a new message replaces the card that was pressed', async () => {
+    app.settings.instant = [1]
+    app.upsert(card(1, [act('Book $212')]))
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    app.upsert(card(2, [], 'Booked. EK 76, seat 32A.'))
+    expect(app.queue.map(c => c.msgId)).toEqual([2])
+    expect(main()).toContain('Booked')
   })
 
   it('a bot alert gets its own screen', async () => {

@@ -45,7 +45,7 @@ type View =
   | { v: 'read' }
   | { v: 'confirm'; a: Action }
   | { v: 'pending'; a: Action; key: string; left: number }
-  | { v: 'wait'; a: Action }
+  | { v: 'wait'; a: Action; toast?: string }
   | { v: 'note'; text: string; head?: string }
   | { v: 'bots'; bots: BotRef[] }
   | { v: 'cmds'; bot: BotRef; cmds: Command[] }
@@ -55,6 +55,10 @@ type View =
 export const UNDO_MS = 1500
 export const NOTE_MS = 1800
 export const FLASH_MS = 2500
+export const EDIT_WAIT_MS = 2000 // after a press, how long the bot gets to edit its message or answer
+
+/** A callback press in flight, and how the bot reacted: edited that message, or answered with a new one. */
+interface Pressed { key: string; chatId: number; label: string; from: string; toast?: string; resolved: boolean; reaction: 'none' | 'edit' | 'new' }
 const W = 576
 const H = 288
 const HEAD_H = 32
@@ -75,6 +79,7 @@ export class App {
   private focus = { chatId: 0, until: 0 }
   private items: Item[] = []
   private flash = { key: '', text: '', until: 0 }
+  private pressed: Pressed | null = null
 
   constructor(private d: Deps, public settings: Settings) {}
 
@@ -83,6 +88,7 @@ export class App {
   setSource(s: Source | null) {
     this.source = s
     this.queue = []
+    this.pressed = null
     this.go(this.view.v === 'root' || !s ? { v: 'root' } : this.view)
   }
 
@@ -94,6 +100,12 @@ export class App {
     if (i >= 0) this.queue[i] = { ...c, receivedAt: this.queue[i].receivedAt }
     else if (this.focus.chatId === c.chatId && this.focus.until > this.d.now()) this.queue.unshift(c)
     else this.queue.push(c)
+    const p = this.pressed
+    if (p && p.chatId === c.chatId) {
+      if (c.key === p.key) p.reaction = 'edit'
+      else if (c.isBot && p.reaction === 'none') p.reaction = 'new'
+      if (p.resolved && p.reaction !== 'none') return this.settle()
+    }
     if (this.view.v === 'root') this.view = { v: 'card' }
     // Latency is "message in, card on the lens": cards that wait in the queue are not measured.
     if (this.queue[0].key !== c.key || this.view.v !== 'card') this.shown.add(c.key)
@@ -155,6 +167,7 @@ export class App {
   }
 
   private menu(id: number) {
+    this.pressed = null
     const c = this.card
     if (id === 1 && c) {
       this.settings.muted[c.chatId] = this.d.now() + 3600_000
@@ -198,10 +211,13 @@ export class App {
     if (!c || !this.source) return this.note('This card is gone.')
     this.go({ v: 'wait', a })
     this.focus = { chatId: c.chatId, until: this.d.now() + 15_000 }
+    const p: Pressed | null = a.kind === 'callback' ? { key: c.key, chatId: c.chatId, label: a.label, from: c.from, resolved: false, reaction: 'none' } : null
+    this.pressed = p
     try {
       const r = await this.source.press(c, a)
       this.log(a, r.toast ? `ok: ${r.toast}` : 'ok', c)
       if (a.kind === 'text') { this.drop(c.key); return this.note(`Sent: "${a.label}"`, c.from, 1200) }
+      if (r.url || (r.toast && r.alert)) this.pressed = null
       if (r.url) return this.note(`Finish on your phone:\n${r.toast ?? r.url}`)
       if (r.toast && r.alert) return this.note(r.toast)
       if (r.toast) {
@@ -209,12 +225,31 @@ export class App {
         this.flash = { key: c.key, text: r.toast, until: this.d.now() + FLASH_MS }
         this.d.later(() => this.render(), FLASH_MS)
       }
-      this.back()
+      if (!p || this.pressed !== p) return this.back()
+      p.toast = r.toast
+      if (p.reaction !== 'none') return this.settle()
+      // The bot has not reacted yet: give it a moment. Without a reaction the card retires,
+      // so the same buttons can never be pressed twice.
+      p.resolved = true
+      this.go({ v: 'wait', a, toast: r.toast })
+      this.cancel = this.d.later(() => this.settle(), EDIT_WAIT_MS)
     } catch (e) {
+      if (this.pressed === p) this.pressed = null
       const msg = errorText(e)
       this.log(a, `error: ${msg}`, c)
       this.note(msg)
     }
+  }
+
+  /** Ends a press: an edited card stays, otherwise it retires (the answer, if any, is a new card). */
+  private settle() {
+    const p = this.pressed
+    if (!p) return
+    this.pressed = null
+    if (p.reaction === 'edit') return this.back()
+    this.drop(p.key)
+    if (p.reaction === 'new') return this.back()
+    this.note(`Sent: ${p.label}${p.toast ? `\n${p.toast}` : ''}`, p.from, 1200)
   }
 
   private dismiss(outcome: string) {
@@ -348,7 +383,7 @@ export class App {
       case 'pending':
         return screen(from, `▶ ${v.a.label}\n\nSending in ${(v.left / 1000).toFixed(1)} s\n${bar(v.left / UNDO_MS)}`, 'Double tap: undo   ·   Tap: send now')
       case 'wait':
-        return screen(from, `▶ ${v.a.label}\n\nWaiting for the bot...`, '')
+        return screen(from, `▶ ${v.a.label}\n\n${v.toast ?? 'Waiting for the bot...'}`, '')
       case 'note':
         return screen(v.head ?? 'Ack', v.text, 'Tap: back')
       case 'voice':
