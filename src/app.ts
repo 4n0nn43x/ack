@@ -93,6 +93,8 @@ export class App {
     else if (this.focus.chatId === c.chatId && this.focus.until > this.d.now()) this.queue.unshift(c)
     else this.queue.push(c)
     if (this.view.v === 'root') this.view = { v: 'card' }
+    // Latency is "message in, card on the lens": cards that wait in the queue are not measured.
+    if (this.queue[0].key !== c.key || this.view.v !== 'card') this.shown.add(c.key)
     this.render()
   }
 

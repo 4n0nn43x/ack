@@ -72,7 +72,7 @@ const SCRIPT: [botId: number, screen: string, at: number][] = [[101, 'ask', 900]
 
 export class DemoSource implements Source {
   readonly kind = 'demo'
-  private msg = 1
+  private msg = Date.now() % 1_000_000_000 // unique per run, so cards dismissed in an earlier run do not hide new ones
   private state = new Map<string, { bot: Bot; screen: string }>()
   private timers: number[] = []
 

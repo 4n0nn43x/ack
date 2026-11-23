@@ -93,11 +93,14 @@ export class Phone {
     if (demo) demo.onclick = () => this.h.demo()
   }
 
-  /** A readable copy of the lens, for the phone and for screen recordings. */
+  /** The lens, drawn to scale: every container at its real position and brightness. */
   mirror(page: Page) {
-    const texts = page.texts.map((t, i) => `<span class="${t.color !== undefined && t.color < 4 ? 'dim' : ''}">${esc(t.text)}</span>${i < page.texts.length - 1 ? '\n' : ''}`).join('')
-    const items = page.list ? page.list.items.map(i => `<span class="item">${esc(i)}</span>`).join('') : ''
-    $(this.root, '#mirror').innerHTML = texts + (items ? `\n${items}` : '')
+    const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(3)}%`
+    const box = (x: number, y: number, w: number, h: number) => `left:${pct(x, 576)};top:${pct(y, 288)};width:${pct(w, 576)};height:${pct(h, 288)}`
+    const texts = page.texts.map(t => `<div class="box b${t.color ?? 4}" style="${box(t.x, t.y, t.w, t.h)}">${esc(t.text)}</div>`).join('')
+    const l = page.list
+    const list = l ? `<div class="box list" style="${box(l.x, l.y, l.w, l.h)}">${l.items.map((i, n) => `<div class="row${n === 0 ? ' sel' : ''}">${esc(i)}</div>`).join('')}</div>` : ''
+    $(this.root, '#mirror').innerHTML = texts + list
   }
 
   log(entries: LogEntry[]) {

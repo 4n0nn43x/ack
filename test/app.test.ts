@@ -212,6 +212,11 @@ describe('queue', () => {
     app.upsert(card(1, [act('A2')]))
     await flush()
     expect(seen).toEqual([120])
+    app.upsert(card(2, [act('B')]))
+    app.input({ type: 'select', index: 1 }) // Later: card 2 reaches the lens after waiting in the queue
+    await flush()
+    expect(app.card?.msgId).toBe(2)
+    expect(seen).toEqual([120])
   })
 })
 

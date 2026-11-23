@@ -14,7 +14,7 @@ const ENV_ID = (import.meta.env.VITE_TG_API_ID as string | undefined) ?? ''
 const ENV_HASH = (import.meta.env.VITE_TG_API_HASH as string | undefined) ?? ''
 const saved: Saved = { mode: 'none', apiId: '', apiHash: '', people: [], replies: DEFAULT_REPLIES, instant: [], muted: {}, voice: { provider: 'groq', key: '' }, ...load<Partial<Saved>>('ack.v1', {}) }
 const log = load<LogEntry[]>('ack.log', [])
-const lat = load<number[]>('ack.lat', [])
+const lat = load<number[]>('ack.latency', [])
 const save = () => store('ack.v1', saved)
 
 let src: DemoSource | TelegramSource | null = null
@@ -40,7 +40,7 @@ const app = new App({
   mic: on => void glasses.mic(on),
   get transcribe() { return saved.voice.key ? (pcm: Uint8Array[], hints: string[]) => transcribe(saved.voice, pcm, hints) : undefined },
   onLog: e => { log.push(e); log.splice(0, log.length - 200); store('ack.log', log); phone.log(log) },
-  onLatency: ms => { lat.push(Math.round(ms)); lat.splice(0, lat.length - 200); store('ack.lat', lat); phone.stats(lat); console.log(`[ack] card on lens in ${Math.round(ms)} ms`) },
+  onLatency: ms => { lat.push(Math.round(ms)); lat.splice(0, lat.length - 200); store('ack.latency', lat); phone.stats(lat); console.log(`[ack] card on lens in ${Math.round(ms)} ms`) },
   onDemo: () => startDemo(),
   onChange: () => { store('ack.dismissed', [...app.dismissed].slice(-500)); save() },
 }, saved)

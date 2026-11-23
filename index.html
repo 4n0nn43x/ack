@@ -46,13 +46,14 @@
       .row { display: flex; gap: 10px; }
       .row > * { flex: 1; }
       .lens {
-        aspect-ratio: 2 / 1; background: #000; border-radius: 10px; padding: 10px 12px;
-        font: 13px/1.35 "SF Mono", ui-monospace, Menlo, monospace; color: var(--lens);
-        overflow: hidden; white-space: pre-wrap; word-break: break-word;
+        position: relative; aspect-ratio: 2 / 1; background: #000; border-radius: 10px; overflow: hidden;
+        container-type: inline-size; color: var(--lens);
+        font: 3.85cqw/4.69cqw -apple-system, system-ui, sans-serif;
       }
-      .lens .dim { color: var(--lens-dim); }
-      .lens .item { display: block; }
-      .lens .item::before { content: "› "; color: var(--lens-dim); }
+      .lens .box { position: absolute; white-space: pre-wrap; word-break: break-word; overflow: hidden; padding: 0 0.6cqw; }
+      .lens .b0 { color: #0f3a1d; } .lens .b1 { color: #1d6a37; } .lens .b2 { color: #2f9a52; } .lens .b3 { color: #48d071; } .lens .b4 { color: var(--lens); }
+      .lens .row { height: 6.94cqw; line-height: 6.94cqw; padding: 0 2.1cqw; color: #2f9a52; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .lens .row.sel { color: var(--lens); outline: 1px solid var(--lens); outline-offset: -2px; border-radius: 1.4cqw; }
       ol { list-style: none; padding: 0; margin: 0; }
       ol li { padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
       ol li:first-child { border-top: 0; padding-top: 0; }
