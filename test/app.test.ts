@@ -130,15 +130,25 @@ describe('a card', () => {
     expect(pressed).toEqual(['Staging only'])
   })
 
-  it('shows the bot answer, then comes back to the card', async () => {
+  it('shows the bot toast in the card header for a moment', async () => {
     app.upsert(card(1, [act('Ping')]))
     app.settings.instant = [1]
     app.input({ type: 'select', index: 0 })
     await flush()
-    expect(main()).toBe('Pong')
-    expect(last().texts[0].text).toBe('@deploybot')
-    await tick(2000)
     expect(app.view.v).toBe('card')
+    expect(last().texts[0]).toMatchObject({ text: '@deploybot · Pong', color: 4 })
+    await tick(2500)
+    expect(last().texts[0]).toMatchObject({ text: '@deploybot · now', color: 2 })
+  })
+
+  it('a bot alert gets its own screen', async () => {
+    const alerting: Source = { ...source, press: async () => ({ toast: 'Insufficient funds', alert: true }) }
+    app.setSource(alerting)
+    app.settings.instant = [1]
+    app.upsert(card(1, [act('Pay')]))
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    expect(main()).toBe('Insufficient funds')
   })
 
   it('an edit updates the card in place', () => {

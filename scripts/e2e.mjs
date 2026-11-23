@@ -45,8 +45,7 @@ await step('pressing shows the undo countdown', async () => {
   await waitFor(/\[ack\] lens @my_agent_bot \| ▶ Allow once.*Sending in.*━/)
 })
 await step('the bot answers and edits its message, the card follows', async () => {
-  await waitFor(/\[ack\] lens @my_agent_bot \| Approved/, 6000)
-  await waitFor(/\[ack\] lens @my_agent_bot · .*Approved once\. \/ Build finished in 41 s, 0 errors\./, 6000)
+  await waitFor(/\[ack\] lens @my_agent_bot · Approved[^|]* \| Approved once\. \/ Build finished in 41 s, 0 errors\./, 6000)
 })
 await step('OK clears the card, the lens is calm again', async () => {
   await input('click')

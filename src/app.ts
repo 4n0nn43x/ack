@@ -3,7 +3,7 @@
 import { ago, fit, match, missingGlyphRatio, order, replies, rowLabel, type Action, type Card } from './cards'
 import type { Input, Page } from './glasses'
 
-export interface PressResult { toast?: string; url?: string }
+export interface PressResult { toast?: string; alert?: boolean; url?: string }
 export interface BotRef { id: number; name: string }
 export interface Command { command: string; description: string }
 
@@ -54,6 +54,7 @@ type View =
 
 export const UNDO_MS = 1500
 export const NOTE_MS = 1800
+export const FLASH_MS = 2500
 const W = 576
 const H = 288
 const HEAD_H = 32
@@ -73,6 +74,7 @@ export class App {
   private pcm: Uint8Array[] = []
   private focus = { chatId: 0, until: 0 }
   private items: Item[] = []
+  private flash = { key: '', text: '', until: 0 }
 
   constructor(private d: Deps, public settings: Settings) {}
 
@@ -201,7 +203,12 @@ export class App {
       this.log(a, r.toast ? `ok: ${r.toast}` : 'ok', c)
       if (a.kind === 'text') { this.drop(c.key); return this.note(`Sent: "${a.label}"`, c.from, 1200) }
       if (r.url) return this.note(`Finish on your phone:\n${r.toast ?? r.url}`)
-      if (r.toast) return this.note(r.toast)
+      if (r.toast && r.alert) return this.note(r.toast)
+      if (r.toast) {
+        // A toast rides in the card header for a moment, on top of the card the bot just edited.
+        this.flash = { key: c.key, text: r.toast, until: this.d.now() + FLASH_MS }
+        this.d.later(() => this.render(), FLASH_MS)
+      }
       this.back()
     } catch (e) {
       const msg = errorText(e)
@@ -369,9 +376,10 @@ export class App {
     if (this.queue.length > 1) this.items.push({ label: `Later (${this.queue.length - 1} more)`, run: () => this.later() })
     const listRows = Math.min(this.items.length, 3)
     const pos = this.queue.length > 1 ? `   1/${this.queue.length}` : ''
+    const flash = this.flash.key === c.key && this.flash.until > this.d.now() ? this.flash.text : ''
     return {
       texts: [
-        { name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: `${c.from} · ${ago(this.d.now() - c.date)}${pos}`, color: 2 },
+        { name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: `${c.from} · ${flash || ago(this.d.now() - c.date)}${pos}`, color: flash ? 4 : 2 },
         { name: 'body', x: 8, y: HEAD_H, w: W - 16, h: H - HEAD_H - listRows * ROW_H, text: body.text, color: 4 },
       ],
       list: { name: 'acts', x: 0, y: H - listRows * ROW_H, w: W, h: listRows * ROW_H, items: this.items.map(i => i.label) },

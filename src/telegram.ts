@@ -91,7 +91,7 @@ export class TelegramSource implements Source {
       return {}
     }
     const r = await this.tg.getCallbackAnswer({ chatId: card.chatId, message: card.msgId, data: action.data ?? new Uint8Array() })
-    return { toast: r.message ? clean(r.message) : undefined, url: r.url }
+    return { toast: r.message ? clean(r.message) : undefined, alert: r.alert, url: r.url }
   }
 
   async send(chatId: number, text: string) {
