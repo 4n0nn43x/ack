@@ -14,7 +14,7 @@ const store = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 
 const ENV_ID = (import.meta.env.VITE_TG_API_ID as string | undefined) ?? ''
 const ENV_HASH = (import.meta.env.VITE_TG_API_HASH as string | undefined) ?? ''
-const saved: Saved = { mode: 'none', apiId: '', apiHash: '', people: [], replies: DEFAULT_REPLIES, instant: [], muted: {}, voice: { provider: 'groq', key: '' }, ...load<Partial<Saved>>('ack.v1', {}) }
+const saved: Saved = { mode: 'none', apiId: '', apiHash: '', people: [], groups: [], replies: DEFAULT_REPLIES, instant: [], muted: {}, voice: { provider: 'groq', key: '' }, ...load<Partial<Saved>>('ack.v1', {}) }
 const log = load<LogEntry[]>('ack.log', [])
 const lat = load<number[]>('ack.latency', [])
 const save = () => store('ack.v1', saved)
@@ -70,8 +70,9 @@ function stop() {
 
 function settingsFor(s: DemoSource | TelegramSource) {
   void s.bots().then(bots => phone.settings(
-    s.kind === 'telegram' ? `Signed in as ${s.me?.displayName ?? ''}. Messages from bots always come; people only if you pick them.` : 'Demo: scripted bots, nothing reaches Telegram.',
-    s.kind === 'telegram' ? s.chats() : [{ id: 201, name: 'Alex' }],
+    s.kind === 'telegram' ? `Signed in as ${s.me?.displayName ?? ''}. Your bots always come to the glasses; people, groups and channels only if you pick them.` : 'Demo: scripted bots, nothing reaches Telegram.',
+    s.kind === 'telegram' ? s.list('person') : [{ id: 201, name: 'Alex' }],
+    s.kind === 'telegram' ? [...s.list('group'), ...s.list('channel')] : [],
     bots,
   ))
 }
@@ -96,7 +97,7 @@ async function startTelegram(firstPhone?: string) {
   stop()
   phone.status('Loading Telegram...')
   const { TelegramSource } = await import('./telegram') // mtcute is heavy: only loaded for a real account
-  const t = new TelegramSource(apiId, apiHash, c => app.upsert(c), k => app.remove(k), () => saved.people, () => replies(saved.replies))
+  const t = new TelegramSource(apiId, apiHash, c => app.upsert(c), k => app.remove(k), () => [...saved.people, ...saved.groups], () => replies(saved.replies))
   src = t
   let pending = firstPhone
   try {

@@ -11,7 +11,7 @@ export interface Source {
   readonly kind: 'telegram' | 'demo'
   /** Presses a callback button or sends a reply-keyboard / quick-reply text. */
   press(card: Card, action: Action): Promise<PressResult>
-  send(chatId: number, text: string): Promise<void>
+  send(chatId: number, text: string, replyTo?: number): Promise<void>
   bots(): Promise<BotRef[]>
   commands(botId: number): Promise<Command[]>
 }
@@ -285,7 +285,7 @@ export class App {
     if (a) return this.fire(a, c.key)
     this.go({ v: 'wait', a: { label: text, kind: 'text' } })
     try {
-      await this.source!.send(c.chatId, text)
+      await this.source!.send(c.chatId, text, c.replyTo)
       this.log({ label: `"${text}"`, kind: 'text' }, 'sent', c)
       this.drop(c.key)
       this.note(`Sent: "${text}"`, c.from, 1200)
@@ -371,7 +371,7 @@ export class App {
     const text = missingGlyphRatio(c.text) > 0.4 ? `${c.text}\n(Some characters only show on your phone.)` : c.text
     const body = fit(text || '(no text)', W - 16, Math.max(1, Math.floor(bodyH / LINE_H)))
     this.items = acts.map(a => ({ label: rowLabel(a), run: () => this.choose(a) }))
-    if (!c.isBot) this.items.push({ label: 'Reply by voice', run: () => this.listen() })
+    if (!c.isBot && !c.readOnly) this.items.push({ label: 'Reply by voice', run: () => this.listen() })
     if (body.cut) this.items.push({ label: 'Read all', run: () => this.go({ v: 'read' }) })
     if (this.queue.length > 1) this.items.push({ label: `Later (${this.queue.length - 1} more)`, run: () => this.later() })
     const listRows = Math.min(this.items.length, 3)

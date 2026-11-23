@@ -3,29 +3,32 @@
 import { TelegramClient, WebCryptoProvider, type Message, type User } from '@mtcute/web'
 import wasmUrl from '@mtcute/wasm/mtcute.wasm?url' // explicit URL: works in Vite dev and in the packed .ehpk
 import type { BotRef, Command, PressResult, Source } from './app'
-import { clean, fromInline, fromReply, type Action, type Card, type RawButton } from './cards'
+import { cardFrom, type MsgLike } from './cards-from'
+import { clean, type Action, type Card } from './cards'
 
 export interface LoginUI {
   ask(kind: 'phone' | 'code' | 'password'): Promise<string>
   status(text: string): void
 }
 
-export interface Chat { id: number; name: string; isBot: boolean }
+export type ChatKind = 'bot' | 'person' | 'group' | 'channel'
+export interface Chat { id: number; name: string; kind: ChatKind }
 
-const FRESH_MS = 48 * 3600_000 // pending bot questions older than this are not resurfaced on start
+const FRESH_MS = 48 * 3600_000 // pending questions older than this are not resurfaced on start
 
 export class TelegramSource implements Source {
   readonly kind = 'telegram'
   readonly tg: TelegramClient
   me: User | null = null
   private recent = new Map<number, Chat>()
+  private keys = new Map<number, string>()
 
   constructor(
     apiId: number,
     apiHash: string,
     private sink: (c: Card) => void,
     private drop: (key: string) => void,
-    private people: () => number[],
+    private follow: () => number[], // people and groups the user picked
     private replies: () => Action[],
   ) {
     this.tg = new TelegramClient({ apiId, apiHash, storage: 'ack-session', crypto: new WebCryptoProvider({ wasmInput: wasmUrl }) })
@@ -41,46 +44,32 @@ export class TelegramSource implements Source {
     })
     this.tg.onNewMessage.add(m => this.take(m))
     this.tg.onEditMessage.add(m => this.take(m))
-    this.tg.onDeleteMessage.add(u => { if (!u.channelId) for (const id of u.messageIds) this.dropMsg(id) })
+    this.tg.onDeleteMessage.add(u => { for (const id of u.messageIds) this.dropMsg(id) })
+    await this.tg.startUpdatesLoop() // start() only signs in; live updates need the loop
   }
 
   /** Brings back the decisions that were waiting while Ack was closed. Call once the app uses this source. */
   async scan() {
-    for await (const d of this.tg.iterDialogs({ limit: 60 })) {
+    for await (const d of this.tg.iterDialogs({ limit: 80 })) {
       const p = d.peer
-      if (p.type !== 'user') continue
-      this.recent.set(p.id, { id: p.id, name: p.isBot ? `@${p.username ?? p.displayName}` : p.displayName, isBot: p.isBot })
+      const chat: Chat = p.type === 'user'
+        ? { id: p.id, name: p.isBot ? `@${p.username ?? p.displayName}` : p.displayName, kind: p.isBot ? 'bot' : 'person' }
+        : { id: p.id, name: p.displayName, kind: p.type === 'chat' && p.chatType === 'channel' ? 'channel' : 'group' }
+      this.recent.set(chat.id, chat)
       const m = d.lastMessage
       if (!m || m.isOutgoing || Date.now() - m.date.getTime() > FRESH_MS) continue
-      if (p.isBot ? m.markup?.type === 'inline' || m.markup?.type === 'reply' : d.unreadCount > 0) this.take(m)
+      const asks = m.markup?.type === 'inline' || m.markup?.type === 'reply'
+      if (chat.kind === 'bot' ? asks : d.unreadCount > 0 || asks) this.take(m)
     }
   }
 
-  private keys = new Map<number, string>()
   private dropMsg(msgId: number) {
     const key = this.keys.get(msgId)
     if (key) this.drop(key)
   }
 
-  /** A Telegram message to a card, or nothing. Only private chats: bots, and the people the user picked. */
-  toCard(m: Message): Card | null {
-    if (m.isOutgoing || m.isService || m.chat.type !== 'user') return null
-    const u = m.chat as User
-    if (!u.isBot && !this.people().includes(u.id)) return null
-    const mk = m.markup
-    const actions = !u.isBot ? this.replies()
-      : mk?.type === 'inline' ? fromInline(mk.buttons as unknown as RawButton[][])
-      : mk?.type === 'reply' ? fromReply(mk.buttons as unknown as RawButton[][])
-      : []
-    const media = (m.media as { type?: string } | null)?.type
-    const text = clean(m.text) || (media ? `[${media}]` : m.richMessage ? '[rich message, open it on your phone]' : '')
-    const name = u.isBot ? `@${u.username ?? u.displayName}` : u.displayName
-    this.recent.set(u.id, { id: u.id, name, isBot: u.isBot })
-    return { key: `${u.id}:${m.id}`, chatId: u.id, msgId: m.id, from: name, isBot: u.isBot, text, date: m.date.getTime(), actions, receivedAt: performance.now() }
-  }
-
   private take(m: Message) {
-    const c = this.toCard(m)
+    const c = cardFrom(m as unknown as MsgLike, this.follow(), this.replies())
     if (!c) return
     this.keys.set(c.msgId, c.key)
     this.sink(c)
@@ -88,24 +77,24 @@ export class TelegramSource implements Source {
 
   async press(card: Card, action: Action): Promise<PressResult> {
     if (action.kind === 'text') {
-      await this.tg.sendText(card.chatId, action.value ?? action.label)
+      await this.send(card.chatId, action.value ?? action.label, card.replyTo)
       return {}
     }
     const r = await this.tg.getCallbackAnswer({ chatId: card.chatId, message: card.msgId, data: action.data ?? new Uint8Array() })
     return { toast: r.message ? clean(r.message) : undefined, alert: r.alert, url: r.url }
   }
 
-  async send(chatId: number, text: string) {
-    await this.tg.sendText(chatId, text)
+  async send(chatId: number, text: string, replyTo?: number) {
+    await this.tg.sendText(chatId, text, replyTo ? { replyTo } : undefined)
   }
 
   async bots(): Promise<BotRef[]> {
-    return [...this.recent.values()].filter(c => c.isBot).map(({ id, name }) => ({ id, name }))
+    return this.list('bot').map(({ id, name }) => ({ id, name }))
   }
 
-  /** People the user can follow, most recent first. */
-  chats(): Chat[] {
-    return [...this.recent.values()].filter(c => !c.isBot)
+  /** Chats of one kind, most recent first, for the phone settings. */
+  list(kind: ChatKind): Chat[] {
+    return [...this.recent.values()].filter(c => c.kind === kind)
   }
 
   async commands(botId: number): Promise<Command[]> {

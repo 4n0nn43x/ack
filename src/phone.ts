@@ -8,6 +8,7 @@ export interface Saved {
   apiId: string
   apiHash: string
   people: number[]
+  groups: number[]
   replies: string[]
   instant: number[]
   muted: Record<string, number>
@@ -123,7 +124,7 @@ export class Phone {
       <div class="stat"><b>${s.length}</b><span>cards</span></div></div>`
   }
 
-  settings(who: string, chats: Pick[], bots: Pick[]) {
+  settings(who: string, chats: Pick[], groups: Pick[], bots: Pick[]) {
     const el = $(this.root, '#settings')
     el.hidden = false
     const checks = (list: Pick[], picked: number[], attr: string, empty: string) => list.length
@@ -134,6 +135,8 @@ export class Phone {
       <p class="hint">${esc(who)}</p>
       <label>People whose messages come to the glasses</label>
       ${checks(chats, this.s.people, 'person', 'Chats show up here once Telegram is connected.')}
+      <label>Groups and channels whose messages come to the glasses</label>
+      ${checks(groups, this.s.groups, 'group', 'Groups show up here once Telegram is connected.')}
       <label for="replies">Quick replies to people, one per line</label>
       <textarea id="replies">${esc(this.s.replies.join('\n'))}</textarea>
       <label>Bots that skip the 1.5 s undo</label>
@@ -146,6 +149,7 @@ export class Phone {
       <button id="leave" class="danger">${this.s.mode === 'demo' ? 'Leave the demo' : 'Sign out of Telegram'}</button>`
     $(el, '#save').onclick = () => {
       this.s.people = [...el.querySelectorAll<HTMLInputElement>('[data-person]')].filter(i => i.checked).map(i => Number(i.dataset.person))
+      this.s.groups = [...el.querySelectorAll<HTMLInputElement>('[data-group]')].filter(i => i.checked).map(i => Number(i.dataset.group))
       this.s.instant = [...el.querySelectorAll<HTMLInputElement>('[data-bot]')].filter(i => i.checked).map(i => Number(i.dataset.bot))
       this.s.replies = $<HTMLTextAreaElement>(el, '#replies').value.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 6)
       this.s.voice = { provider: $<HTMLSelectElement>(el, '#prov').value as Provider, key: $<HTMLInputElement>(el, '#vkey').value.trim() }

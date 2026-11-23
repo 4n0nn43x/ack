@@ -23,6 +23,8 @@ export interface Card {
   date: number // ms, when Telegram stamped the message
   actions: Action[]
   receivedAt: number // performance.now() when Ack received it, for latency
+  replyTo?: number // in groups, answers go back as a reply to this message
+  readOnly?: boolean // channels: nothing can be sent back
 }
 
 // Raw TL shapes from Telegram layer 233 (mtcute passes them through untouched).
