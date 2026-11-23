@@ -215,6 +215,35 @@ describe('queue', () => {
   })
 })
 
+describe('people', () => {
+  const alex = () => ({ ...card(9, [{ label: 'Yes', kind: 'text' as const, value: 'Yes' }], 'Still on for 7pm?'), from: 'Alex', isBot: false })
+
+  it('offers quick replies and a visible voice entry', () => {
+    app.upsert(alex())
+    expect(last().list!.items).toEqual(['Yes', 'Reply by voice'])
+  })
+
+  it('a quick reply is sent after the undo window and confirmed on the lens', async () => {
+    app.upsert(alex())
+    app.input({ type: 'select', index: 0 })
+    await tick(UNDO_MS)
+    expect(pressed).toEqual(['Yes'])
+    expect(main()).toBe('Sent: "Yes"')
+    expect(app.queue).toHaveLength(0)
+  })
+
+  it('voice can also be started and finished with taps', async () => {
+    app = new App(deps({ transcribe: async () => 'see you there' }), { instant: [], muted: {}, replies: [] })
+    app.setSource(source)
+    app.upsert(alex())
+    app.input({ type: 'select', index: 1 })
+    expect(main()).toBe('Listening...')
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(main()).toContain('"see you there"')
+  })
+})
+
 describe('bots and commands from the lens', () => {
   it('tap on the empty lens lists bots, then their commands, then sends one', async () => {
     app.input({ type: 'click', ring: false })
@@ -222,7 +251,7 @@ describe('bots and commands from the lens', () => {
     expect(last().list!.items).toEqual(['@BotFather'])
     app.input({ type: 'select', index: 0 })
     await flush()
-    expect(last().list!.items[0]).toBe('/mybots Edit your bots')
+    expect(last().list!.items[0]).toBe('/mybots · Edit your bots')
     app.input({ type: 'select', index: 0 })
     await flush()
     expect(sent).toEqual(['7:/mybots'])

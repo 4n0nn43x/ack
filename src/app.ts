@@ -138,7 +138,7 @@ export class App {
         if (i.type === 'double') return v.v === 'cmds' ? void this.openBots() : this.go({ v: 'root' })
         return
       case 'voice':
-        if (i.type === 'longEnd') return this.heard()
+        if (i.type === 'longEnd' || i.type === 'click') return this.heard()
         if (i.type === 'double') { this.d.mic?.(false); return this.back() }
         return
       case 'heard':
@@ -197,7 +197,7 @@ export class App {
     try {
       const r = await this.source.press(c, a)
       this.log(a, r.toast ? `ok: ${r.toast}` : 'ok', c)
-      if (a.kind === 'text') this.drop(c.key)
+      if (a.kind === 'text') { this.drop(c.key); return this.note(`Sent: "${a.label}"`, c.from, 1200) }
       if (r.url) return this.note(`Finish on your phone:\n${r.toast ?? r.url}`)
       if (r.toast) return this.note(r.toast)
       this.back()
@@ -279,7 +279,7 @@ export class App {
       await this.source!.send(c.chatId, text)
       this.log({ label: `"${text}"`, kind: 'text' }, 'sent', c)
       this.drop(c.key)
-      this.note(`Sent to ${c.from}`)
+      this.note(`Sent: "${text}"`, c.from, 1200)
     } catch (e) {
       this.note(errorText(e))
     }
@@ -298,9 +298,9 @@ export class App {
     this.go(this.queue.length ? { v: 'card' } : { v: 'root' })
   }
 
-  private note(text: string, head = this.card?.from) {
+  private note(text: string, head = this.card?.from, ms = NOTE_MS) {
     this.go({ v: 'note', text, head })
-    this.cancel = this.d.later(() => this.back(), NOTE_MS)
+    this.cancel = this.d.later(() => this.back(), ms)
   }
 
   private log(a: Action, outcome: string, c = this.card) {
@@ -335,7 +335,7 @@ export class App {
       case 'read':
         return screen(from, c?.text ?? '', 'Swipe: scroll   ·   Tap: back')
       case 'confirm':
-        return screen(`${from} · marked as dangerous`, `▲ ${v.a.label}?`, 'Tap: yes, do it   ·   Double tap: no')
+        return screen(`${from} · marked as dangerous`, `▲ ${v.a.label}?\n\n${c ? fit(c.text, W - 16, 4).text : ''}`, 'Tap: yes, do it   ·   Double tap: no')
       case 'pending':
         return screen(from, `▶ ${v.a.label}\n\nSending in ${(v.left / 1000).toFixed(1)} s\n${bar(v.left / UNDO_MS)}`, 'Double tap: undo   ·   Tap: send now')
       case 'wait':
@@ -343,14 +343,14 @@ export class App {
       case 'note':
         return screen(v.head ?? 'Ack', v.text, 'Tap: back')
       case 'voice':
-        return screen(from, 'Listening...', 'Release to finish   ·   Double tap: cancel')
+        return screen(from, 'Listening...', 'Tap or release: done   ·   Double tap: cancel')
       case 'heard':
         return screen(from, `"${v.text}"\n\n${v.a ? `→ ${rowLabel(v.a)}` : '→ Send it as a message'}`, 'Tap: yes   ·   Double tap: no')
       case 'bots':
         this.items = v.bots.slice(0, 19).map(b => ({ label: b.name, run: () => void this.openCommands(b) }))
-        return listPage('Your bots · pick one to see its menu', this.items)
+        return listPage('Your bots', this.items)
       case 'cmds':
-        this.items = v.cmds.slice(0, 19).map(cm => ({ label: `/${cm.command} ${cm.description}`.trim(), run: () => void this.sendCommand(v.bot, cm.command) }))
+        this.items = v.cmds.slice(0, 19).map(cm => ({ label: cm.description ? `/${cm.command} · ${cm.description}` : `/${cm.command}`, run: () => void this.sendCommand(v.bot, cm.command) }))
         return listPage(`${v.bot.name} · commands`, this.items)
     }
   }
@@ -362,6 +362,7 @@ export class App {
     const text = missingGlyphRatio(c.text) > 0.4 ? `${c.text}\n(Some characters only show on your phone.)` : c.text
     const body = fit(text || '(no text)', W - 16, Math.max(1, Math.floor(bodyH / LINE_H)))
     this.items = acts.map(a => ({ label: rowLabel(a), run: () => this.choose(a) }))
+    if (!c.isBot) this.items.push({ label: 'Reply by voice', run: () => this.listen() })
     if (body.cut) this.items.push({ label: 'Read all', run: () => this.go({ v: 'read' }) })
     if (this.queue.length > 1) this.items.push({ label: `Later (${this.queue.length - 1} more)`, run: () => this.later() })
     const listRows = Math.min(this.items.length, 3)
@@ -401,10 +402,13 @@ function bar(share: number): string {
 }
 
 function listPage(title: string, items: Item[]): Page {
-  const listH = Math.min(items.length, 6) * ROW_H
+  const rows = Math.min(items.length, Math.floor((H - HEAD_H - FOOT_H) / ROW_H))
   return {
-    texts: [{ name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: title, color: 2 }],
-    list: { name: 'items', x: 0, y: HEAD_H, w: W, h: Math.min(listH, H - HEAD_H), items: items.map(i => rowLabel({ label: i.label, kind: 'callback' })) },
+    texts: [
+      { name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: title, color: 2 },
+      { name: 'foot', x: 8, y: H - FOOT_H, w: W - 16, h: FOOT_H, text: 'Tap: open   ·   Double tap: back', color: 2 },
+    ],
+    list: { name: 'items', x: 0, y: HEAD_H, w: W, h: rows * ROW_H, items: items.map(i => rowLabel({ label: i.label, kind: 'callback' })) },
   }
 }
 
