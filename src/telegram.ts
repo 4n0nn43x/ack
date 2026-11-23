@@ -1,6 +1,7 @@
 // Live Telegram: the user's own account over MTProto (mtcute, layer 233), straight from the phone.
 // The session lives in the WebView's IndexedDB; no Ack server ever sees it.
-import { TelegramClient, type Message, type User } from '@mtcute/web'
+import { TelegramClient, WebCryptoProvider, type Message, type User } from '@mtcute/web'
+import wasmUrl from '@mtcute/wasm/mtcute.wasm?url' // explicit URL: works in Vite dev and in the packed .ehpk
 import type { BotRef, Command, PressResult, Source } from './app'
 import { clean, fromInline, fromReply, type Action, type Card, type RawButton } from './cards'
 
@@ -27,7 +28,7 @@ export class TelegramSource implements Source {
     private people: () => number[],
     private replies: () => Action[],
   ) {
-    this.tg = new TelegramClient({ apiId, apiHash, storage: 'ack-session' })
+    this.tg = new TelegramClient({ apiId, apiHash, storage: 'ack-session', crypto: new WebCryptoProvider({ wasmInput: wasmUrl }) })
   }
 
   async start(ui: LoginUI) {
