@@ -5,6 +5,7 @@ import {
   ListItemContainerProperty,
   OsEventTypeList,
   RebuildPageContainer,
+  TextContainerUpgrade,
   TextContainerProperty,
   type EvenAppBridge,
   type EvenHubEvent,
@@ -88,11 +89,15 @@ export function toPayload(page: Page) {
 
 const TIMEOUT_MS = 4000
 
+/** Everything but the text values: same layout means an in-place text update is enough. */
+export const layout = (p: Page) => JSON.stringify({ ...p, texts: p.texts.map(t => ({ ...t, text: '', color: 0 })) })
+
 /** Serializes every bridge call (concurrent calls can drop the BLE link) and caps each one. */
 export class Glasses {
   private chain: Promise<unknown> = Promise.resolve()
   private started = false
   private last = ''
+  private lastPage: Page | null = null
   constructor(private bridge: EvenAppBridge) {}
 
   private run<T>(fn: () => Promise<T>): Promise<T | undefined> {
@@ -104,18 +109,32 @@ export class Glasses {
     return next
   }
 
-  /** Draws a page; identical pages are skipped. Resolves with true once the glasses accepted it. */
+  /**
+   * Draws a page. Identical pages are skipped; when only texts changed, they are updated in place
+   * (textContainerUpgrade: faster than a rebuild and flicker-free on the glasses).
+   * Resolves with true once the glasses accepted it.
+   */
   draw(page: Page, force = false): Promise<boolean> {
     const key = JSON.stringify(page)
     if (key === this.last && !force) return Promise.resolve(true)
+    const prev = this.lastPage
     this.last = key
+    this.lastPage = page
     return this.run(async () => {
-      const p = toPayload(page)
       if (!this.started) {
         this.started = true
-        return (await this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(p))) === 0
+        return (await this.bridge.createStartUpPageContainer(new CreateStartUpPageContainer(toPayload(page)))) === 0
       }
-      return this.bridge.rebuildPageContainer(new RebuildPageContainer(p))
+      if (!force && prev && layout(prev) === layout(page)) {
+        let ok = true
+        for (const [i, t] of page.texts.entries()) {
+          const was = prev.texts[i]
+          if (was.text === t.text && was.color === t.color) continue
+          ok = (await this.bridge.textContainerUpgrade(new TextContainerUpgrade({ containerID: i + 1, containerName: t.name, content: t.text.slice(0, 1999) || ' ', textColor: t.color ?? 4 }))) && ok
+        }
+        return ok
+      }
+      return this.bridge.rebuildPageContainer(new RebuildPageContainer(toPayload(page)))
     }).then(ok => ok === true)
   }
 

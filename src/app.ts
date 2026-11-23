@@ -44,9 +44,9 @@ type View =
   | { v: 'card' }
   | { v: 'read' }
   | { v: 'confirm'; a: Action }
-  | { v: 'pending'; a: Action; key: string }
+  | { v: 'pending'; a: Action; key: string; left: number }
   | { v: 'wait'; a: Action }
-  | { v: 'note'; text: string }
+  | { v: 'note'; text: string; head?: string }
   | { v: 'bots'; bots: BotRef[] }
   | { v: 'cmds'; bot: BotRef; cmds: Command[] }
   | { v: 'voice' }
@@ -57,6 +57,8 @@ export const NOTE_MS = 1800
 const W = 576
 const H = 288
 const HEAD_H = 32
+const FOOT_H = 32
+const STEP_MS = 300
 const ROW_H = 40
 const LINE_H = 27
 const MENU = [{ id: 1, label: 'Mute this chat 1 h' }, { id: 2, label: 'Read all' }, { id: 3, label: 'Clear all cards' }]
@@ -178,8 +180,13 @@ export class App {
     }
     if (a.style === 'danger') return this.go({ v: 'confirm', a })
     if (this.settings.instant.includes(c.chatId)) return this.fire(a, c.key)
-    this.go({ v: 'pending', a, key: c.key })
-    this.cancel = this.d.later(() => this.fire(a, c.key), UNDO_MS)
+    this.countdown(a, c.key, UNDO_MS)
+  }
+
+  private countdown(a: Action, key: string, left: number) {
+    if (left <= 0) return void this.fire(a, key)
+    this.go({ v: 'pending', a, key, left })
+    this.cancel = this.d.later(() => this.countdown(a, key, left - STEP_MS), Math.min(STEP_MS, left))
   }
 
   private async fire(a: Action, key: string) {
@@ -219,13 +226,13 @@ export class App {
 
   private async openBots() {
     const bots = (await this.source?.bots()) ?? []
-    if (!bots.length) return this.note('No bot chats yet.\nStart one in Telegram.')
+    if (!bots.length) return this.note('No bot chats yet.\nStart one in Telegram.', 'Ack')
     this.go({ v: 'bots', bots })
   }
 
   private async openCommands(bot: BotRef) {
     const cmds = (await this.source?.commands(bot.id)) ?? []
-    if (!cmds.length) return this.note(`${bot.name} has no command menu.`)
+    if (!cmds.length) return this.note('This bot has no command menu.', bot.name)
     this.go({ v: 'cmds', bot, cmds })
   }
 
@@ -234,9 +241,9 @@ export class App {
     try {
       await this.source!.send(bot.id, `/${cmd}`)
       this.d.onLog?.({ at: this.d.now(), from: bot.name, card: '(command menu)', action: `/${cmd}`, outcome: 'sent' })
-      this.note(`Sent /${cmd} to ${bot.name}`)
+      this.note(`Sent /${cmd}\nThe answer will show up here.`, bot.name)
     } catch (e) {
-      this.note(errorText(e))
+      this.note(errorText(e), bot.name)
     }
   }
 
@@ -291,8 +298,8 @@ export class App {
     this.go(this.queue.length ? { v: 'card' } : { v: 'root' })
   }
 
-  private note(text: string) {
-    this.go({ v: 'note', text })
+  private note(text: string, head = this.card?.from) {
+    this.go({ v: 'note', text, head })
     this.cancel = this.d.later(() => this.back(), NOTE_MS)
   }
 
@@ -316,31 +323,32 @@ export class App {
   page(): Page {
     const v = this.view
     const c = this.card
+    const from = c?.from ?? 'Ack'
     this.items = []
     switch (v.v) {
       case 'root':
-        return full(this.source
-          ? 'Ack\n\nNothing waiting.\n\nTap: your bots\nDouble tap: exit'
-          : 'Ack\n\nSign in to Telegram: open Ack\nin the Even app on your phone.\n\nTap: try the demo\nDouble tap: exit', 2)
+        return this.source
+          ? screen('Ack', 'Nothing waiting.', 'Tap: your bots   ·   Double tap: exit', 2)
+          : screen('Ack', 'Sign in to Telegram:\nopen Ack in the Even app\non your phone.', 'Tap: try the demo   ·   Double tap: exit', 2)
       case 'card':
-        return c ? this.cardPage(c) : full('Nothing waiting.', 2)
+        return c ? this.cardPage(c) : screen('Ack', 'Nothing waiting.', '', 2)
       case 'read':
-        return full(c ? `${c.from}\n${c.text}` : '', 4)
+        return screen(from, c?.text ?? '', 'Swipe: scroll   ·   Tap: back')
       case 'confirm':
-        return full(`▲ ${v.a.label}?\n\n${c?.from ?? ''} marked this as dangerous.\n\nTap: yes, do it\nDouble tap: no`)
+        return screen(`${from} · marked as dangerous`, `▲ ${v.a.label}?`, 'Tap: yes, do it   ·   Double tap: no')
       case 'pending':
-        return full(`▶ ${v.a.label}\n\nSending in ${UNDO_MS / 1000} s\nDouble tap: undo\nTap: send now`)
+        return screen(from, `▶ ${v.a.label}\n\nSending in ${(v.left / 1000).toFixed(1)} s\n${bar(v.left / UNDO_MS)}`, 'Double tap: undo   ·   Tap: send now')
       case 'wait':
-        return full(`▶ ${v.a.label}\n\nWaiting for ${c?.from ?? 'Telegram'}...`)
+        return screen(from, `▶ ${v.a.label}\n\nWaiting for the bot...`, '')
       case 'note':
-        return full(v.text)
+        return screen(v.head ?? 'Ack', v.text, 'Tap: back')
       case 'voice':
-        return full('Listening...\n\nRelease to finish\nDouble tap: cancel')
+        return screen(from, 'Listening...', 'Release to finish   ·   Double tap: cancel')
       case 'heard':
-        return full(`"${v.text}"\n\n${v.a ? `→ ${rowLabel(v.a)}` : `→ Send as a message to ${c?.from ?? ''}`}\n\nTap: yes\nDouble tap: no`)
+        return screen(from, `"${v.text}"\n\n${v.a ? `→ ${rowLabel(v.a)}` : '→ Send it as a message'}`, 'Tap: yes   ·   Double tap: no')
       case 'bots':
         this.items = v.bots.slice(0, 19).map(b => ({ label: b.name, run: () => void this.openCommands(b) }))
-        return listPage('Your bots · tap to open its menu', this.items)
+        return listPage('Your bots · pick one to see its menu', this.items)
       case 'cmds':
         this.items = v.cmds.slice(0, 19).map(cm => ({ label: `/${cm.command} ${cm.description}`.trim(), run: () => void this.sendCommand(v.bot, cm.command) }))
         return listPage(`${v.bot.name} · commands`, this.items)
@@ -375,8 +383,21 @@ export class App {
   }
 }
 
-function full(text: string, color = 4): Page {
-  return { texts: [{ name: 'main', x: 0, y: 0, w: W, h: H, pad: 8, text, color, capture: true }] }
+/** Every non-list screen: dim context on top, the message, dim gesture hints at the bottom. */
+function screen(head: string, body: string, foot: string, color = 4): Page {
+  return {
+    texts: [
+      { name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: head, color: 2 },
+      { name: 'main', x: 8, y: HEAD_H, w: W - 16, h: H - HEAD_H - FOOT_H, text: body, color, capture: true },
+      { name: 'foot', x: 8, y: H - FOOT_H, w: W - 16, h: FOOT_H, text: foot, color: 2 },
+    ],
+  }
+}
+
+function bar(share: number): string {
+  const n = 24
+  const on = Math.max(0, Math.min(n, Math.round(share * n)))
+  return '━'.repeat(on) + '─'.repeat(n - on)
 }
 
 function listPage(title: string, items: Item[]): Page {

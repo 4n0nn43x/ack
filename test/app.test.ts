@@ -11,9 +11,18 @@ let pressed: string[] = []
 let sent: string[] = []
 let exited = 0
 
+// Advances a fake clock timer by timer, so timers created while firing run at the right time.
 const tick = async (ms: number) => {
-  t += ms
-  for (const x of timers.filter(x => !x.dead && x.at <= t)) { x.dead = true; x.fn() }
+  const end = t + ms
+  for (;;) {
+    const next = timers.filter(x => !x.dead && x.at <= end).sort((a, b) => a.at - b.at)[0]
+    if (!next) break
+    t = next.at
+    next.dead = true
+    next.fn()
+    await new Promise(r => setTimeout(r, 0))
+  }
+  t = end
   await new Promise(r => setTimeout(r, 0))
 }
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -41,6 +50,7 @@ const card = (id: number, actions: Action[], text = 'Deploy api v2.3.1 to produc
   ({ key: `1:${id}`, chatId: 1, msgId: id, from: '@deploybot', isBot: true, text, date: t, actions, receivedAt: t })
 const last = () => pages[pages.length - 1]
 const lens = () => last().texts.map(x => x.text).join('\n')
+const main = () => last().texts[1].text
 
 let app: App
 beforeEach(() => {
@@ -74,7 +84,8 @@ describe('a card', () => {
   it('presses after the undo window', async () => {
     app.upsert(card(1, [act('Staging only')]))
     app.input({ type: 'select', index: 0 })
-    expect(lens()).toContain('double tap: undo'.replace('d', 'D'))
+    expect(lens()).toContain('Double tap: undo')
+    expect(main()).toContain('━━━━')
     await tick(UNDO_MS - 1)
     expect(pressed).toEqual([])
     await tick(1)
@@ -124,7 +135,8 @@ describe('a card', () => {
     app.settings.instant = [1]
     app.input({ type: 'select', index: 0 })
     await flush()
-    expect(lens()).toBe('Pong')
+    expect(main()).toBe('Pong')
+    expect(last().texts[0].text).toBe('@deploybot')
     await tick(2000)
     expect(app.view.v).toBe('card')
   })
@@ -249,7 +261,8 @@ describe('voice', () => {
     app.input({ type: 'longStart' })
     app.input({ type: 'longEnd' })
     await flush()
-    expect(lens()).toContain('Send as a message to Alex')
+    expect(last().texts[0].text).toBe('Alex')
+    expect(main()).toContain('Send it as a message')
     app.input({ type: 'click', ring: false })
     await flush()
     expect(sent).toEqual(['1:running 5 minutes late'])

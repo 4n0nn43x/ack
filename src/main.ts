@@ -1,79 +1,133 @@
-import {
-  waitForEvenAppBridge,
-  TextContainerProperty,
-  CreateStartUpPageContainer,
-  TextContainerUpgrade,
-  OsEventTypeList,
-} from '@evenrealities/even_hub_sdk'
+import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
+import { App, errorText, type LogEntry } from './app'
+import { DEFAULT_REPLIES, replies } from './cards'
+import { DemoSource } from './demo'
+import { Glasses, parseEvent } from './glasses'
+import { Phone, type Saved } from './phone'
+import type { TelegramSource } from './telegram'
+import { transcribe } from './voice'
+
+const load = <T>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? (JSON.parse(v) as T) : d } catch { return d } }
+const store = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private mode: keep going */ } }
+
+const ENV_ID = (import.meta.env.VITE_TG_API_ID as string | undefined) ?? ''
+const ENV_HASH = (import.meta.env.VITE_TG_API_HASH as string | undefined) ?? ''
+const saved: Saved = { mode: 'none', apiId: '', apiHash: '', people: [], replies: DEFAULT_REPLIES, instant: [], muted: {}, voice: { provider: 'groq', key: '' }, ...load<Partial<Saved>>('ack.v1', {}) }
+const log = load<LogEntry[]>('ack.log', [])
+const lat = load<number[]>('ack.lat', [])
+const save = () => store('ack.v1', saved)
+
+let src: DemoSource | TelegramSource | null = null
+
+const phone = new Phone(document.getElementById('app')!, saved, {
+  connect: p => void startTelegram(p),
+  demo: () => startDemo(),
+  leave: () => void leave(),
+  save,
+}, Boolean(ENV_ID && ENV_HASH))
+phone.log(log)
+phone.stats(lat)
 
 const bridge = await waitForEvenAppBridge()
+const glasses = new Glasses(bridge)
 
-const mainText = new TextContainerProperty({
-  xPosition: 0,
-  yPosition: 0,
-  width: 576,
-  height: 288,
-  borderWidth: 0,
-  borderColor: 5,
-  paddingLength: 4,
-  containerID: 1,
-  containerName: 'main',
-  content: 'Hello from G2!\nTap to count · double-tap to exit.',
-  isEventCapture: 1,
+const app = new App({
+  draw: (page, force) => { phone.mirror(page); return glasses.draw(page, force) },
+  exit: () => void glasses.exit(),
+  now: () => Date.now(),
+  perf: () => performance.now(),
+  later: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id) },
+  mic: on => void glasses.mic(on),
+  get transcribe() { return saved.voice.key ? (pcm: Uint8Array[], hints: string[]) => transcribe(saved.voice, pcm, hints) : undefined },
+  onLog: e => { log.push(e); log.splice(0, log.length - 200); store('ack.log', log); phone.log(log) },
+  onLatency: ms => { lat.push(Math.round(ms)); lat.splice(0, lat.length - 200); store('ack.lat', lat); phone.stats(lat); console.log(`[ack] card on lens in ${Math.round(ms)} ms`) },
+  onDemo: () => startDemo(),
+  onChange: () => { store('ack.dismissed', [...app.dismissed].slice(-500)); save() },
+}, saved)
+for (const k of load<string[]>('ack.dismissed', [])) app.dismissed.add(k)
+
+bridge.onEvenHubEvent(e => {
+  const i = parseEvent(e)
+  if (!i) return
+  if (i.type === 'exit') { void glasses.mic(false); return }
+  app.input(i)
 })
 
-const result = await bridge.createStartUpPageContainer(
-  new CreateStartUpPageContainer({
-    containerTotalNum: 1,
-    textObject: [mainText],
-  }),
-)
+app.render()
+console.log('[ack] ready')
+setInterval(() => { if (app.view.v === 'card') app.render() }, 30_000) // keeps "2m ago" honest
 
-console.log('Page created:', result === 0 ? 'success' : `failed (${result})`)
-
-// Reads the event type out of one envelope.
-//
-// CLICK_EVENT is 0, and protobuf omits zero-value fields on the wire, so a
-// single tap arrives as an envelope whose `eventType` is `undefined`. The
-// default has to be resolved INSIDE the envelope check. Writing
-// `event.sysEvent?.eventType ?? OsEventTypeList.CLICK_EVENT` instead would
-// read CLICK on events that carry no `sysEvent` at all, so every scroll,
-// exit and audio frame would fire the tap handler.
-function eventTypeOf(envelope?: { eventType?: OsEventTypeList }): OsEventTypeList | null {
-  if (!envelope) return null
-  return envelope.eventType ?? OsEventTypeList.CLICK_EVENT
+function stop() {
+  if (src?.kind === 'demo') src.stop()
+  src = null
 }
 
-// Event routing, critical details:
-//   • Taps/double-taps/lifecycle come through `event.sysEvent`.
-//     Scroll gestures come through `event.textEvent`. Never mix them.
-//   • Double-tap → `shutDownPageContainer(1)` is a root-level check: it
-//     must fire no matter which envelope the event arrives in, so users
-//     can always exit the app.
-//   • Check DOUBLE_CLICK_EVENT before CLICK_EVENT.
-let taps = 0
-const unsubscribe = bridge.onEvenHubEvent(event => {
-  const sysType = eventTypeOf(event.sysEvent)
-  const textType = eventTypeOf(event.textEvent)
+function settingsFor(s: DemoSource | TelegramSource) {
+  void s.bots().then(bots => phone.settings(
+    s.kind === 'telegram' ? `Signed in as ${s.me?.displayName ?? ''}. Messages from bots always come; people only if you pick them.` : 'Demo: scripted bots, nothing reaches Telegram.',
+    s.kind === 'telegram' ? s.chats() : [{ id: 201, name: 'Alex' }],
+    bots,
+  ))
+}
 
-  if (sysType === OsEventTypeList.DOUBLE_CLICK_EVENT || textType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-    bridge.shutDownPageContainer(1)
-    return
-  }
+function startDemo() {
+  stop()
+  saved.mode = 'demo'
+  save()
+  const d = new DemoSource(c => app.upsert(c), () => replies(saved.replies))
+  src = d
+  app.setSource(d)
+  d.start()
+  phone.hideSignin()
+  phone.status('Demo', 'live')
+  settingsFor(d)
+}
 
-  if (sysType === OsEventTypeList.CLICK_EVENT || textType === OsEventTypeList.CLICK_EVENT) {
-    taps += 1
-    bridge.textContainerUpgrade(
-      new TextContainerUpgrade({
-        containerID: 1,
-        containerName: 'main',
-        content: `Taps: ${taps}\nTap to count · double-tap to exit.`,
-      }),
-    )
-    return
+async function startTelegram(firstPhone?: string) {
+  const apiId = Number(ENV_ID || saved.apiId)
+  const apiHash = ENV_HASH || saved.apiHash
+  if (!apiId || !apiHash) { phone.status('Telegram API keys needed', 'warn'); return phone.showSignin('phone') }
+  stop()
+  phone.status('Loading Telegram...')
+  const { TelegramSource } = await import('./telegram') // mtcute is heavy: only loaded for a real account
+  const t = new TelegramSource(apiId, apiHash, c => app.upsert(c), k => app.remove(k), () => saved.people, () => replies(saved.replies))
+  src = t
+  let pending = firstPhone
+  try {
+    await t.start({
+      ask: kind => {
+        if (kind === 'phone' && pending) { const p = pending; pending = undefined; return Promise.resolve(p) }
+        phone.status(kind === 'code' ? 'Code sent' : kind === 'password' ? 'Password needed' : 'Sign in')
+        return phone.ask(kind)
+      },
+      status: s => phone.status(s),
+    })
+    saved.mode = 'telegram'
+    save()
+    app.setSource(t)
+    phone.hideSignin()
+    phone.status(`Connected · ${t.me?.displayName ?? ''}`, 'live')
+    await t.scan()
+    settingsFor(t)
+  } catch (e) {
+    console.error('[ack] telegram', e)
+    phone.status(errorText(e).split('\n')[0], 'warn')
+    phone.showSignin('phone')
   }
+}
 
-  if (sysType === OsEventTypeList.SYSTEM_EXIT_EVENT || sysType === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
-    unsubscribe()
-  }
-})
+async function leave() {
+  const was = src
+  stop()
+  if (was?.kind === 'telegram') await was.signOut()
+  saved.mode = 'none'
+  save()
+  app.setSource(null)
+  phone.status('Signed out')
+  phone.showSignin('phone')
+  document.getElementById('settings')!.hidden = true
+}
+
+if (saved.mode === 'demo') startDemo()
+else if (saved.mode === 'telegram') void startTelegram()
+else phone.status('Not signed in')
