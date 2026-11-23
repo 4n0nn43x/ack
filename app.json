@@ -1,0 +1,28 @@
+{
+  "package_id": "app.ack.glasses",
+  "edition": "202601",
+  "name": "Ack",
+  "version": "0.1.0",
+  "min_sdk_version": "0.0.16",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Connects to Telegram from your phone to show bot decisions and send your taps. Optional voice transcription with your own key.",
+      "whitelist": [
+        "wss://pluto.web.telegram.org",
+        "wss://venus.web.telegram.org",
+        "wss://aurora.web.telegram.org",
+        "wss://vesta.web.telegram.org",
+        "wss://flora.web.telegram.org",
+        "https://api.groq.com",
+        "https://api.openai.com"
+      ]
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "Hold to answer a card by voice. Audio is only captured while you hold."
+    }
+  ],
+  "supported_languages": ["en", "fr"]
+}

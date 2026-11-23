@@ -1,0 +1,25 @@
+{
+  "name": "ack",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "pack": "npm run build && evenhub pack app.json dist -o ack.ehpk --sdk-ver 0.0.16",
+    "simulate": "evenhub-simulator http://localhost:5173",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.16",
+    "@evenrealities/pretext": "^0.1.4",
+    "@mtcute/web": "^0.32.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  },
+  "description": "Every Telegram bot button, one tap on Even G2"
+}
