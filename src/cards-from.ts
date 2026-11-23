@@ -1,5 +1,21 @@
-// A Telegram message to a card. Kept apart from the client so it is tested without a connection.
+// A Telegram message to a card (lens) or a bubble (phone). Kept apart from the client so it is tested without a connection.
 import { clean, fromInline, fromReply, type Action, type Card, type RawButton } from './cards'
+
+export type ChatKind = 'bot' | 'person' | 'group' | 'channel'
+
+/** One row of the phone's chat list. */
+export interface ChatRow { id: number; name: string; kind: ChatKind; preview: string; date: number; unread: number }
+
+/** One message in the phone's chat view. The phone draws the original text and button labels (emoji included). */
+export interface Bubble {
+  id: number
+  out: boolean
+  from: string // sender name in groups, empty elsewhere
+  text: string
+  date: number
+  buttons: { label: string; action: Action }[]
+  card: Card // what Source.press needs to press one of the buttons
+}
 
 interface PeerLike { type: string; id: number; isBot?: boolean; username?: string | null; displayName: string; chatType?: string }
 
@@ -18,6 +34,12 @@ export interface MsgLike {
 }
 
 const nameOf = (p: PeerLike) => (p.isBot ? `@${p.username ?? p.displayName}` : p.displayName)
+
+/**
+ * Where a message id is unique. Private chats and basic groups share one id sequence (scope 0);
+ * supergroups and channels each have their own, and their deletions name the channel.
+ */
+export const idScope = (chat: PeerLike): number => (chat.type === 'chat' && chat.chatType !== 'group' ? chat.id : 0)
 
 /**
  * Which messages become cards:
@@ -55,5 +77,34 @@ export function cardFrom(m: MsgLike, follow: number[], replies: Action[]): Card 
     actions,
     receivedAt: performance.now(),
     ...(privateChat ? {} : channel ? { readOnly: true } : { replyTo: m.id }),
+  }
+}
+
+/** What a message says in one line, for chat list previews and media-only messages. */
+export function preview(m: Pick<MsgLike, 'text' | 'media' | 'richMessage'>): string {
+  const media = (m.media as { type?: string } | null)?.type
+  return m.text || (media ? `[${media}]` : m.richMessage ? '[rich message]' : '')
+}
+
+/** A message for the phone's chat view, with its buttons ready to press. */
+export function bubbleFrom(m: MsgLike): Bubble {
+  const raw = ((m.markup?.type === 'inline' || m.markup?.type === 'reply') ? (m.markup.buttons ?? []) : []) as RawButton[][]
+  const actions = m.markup?.type === 'inline' ? fromInline(raw) : m.markup?.type === 'reply' ? fromReply(raw) : []
+  const labels = raw.flat().map(b => b.text)
+  const privateChat = m.chat.type === 'user'
+  const channel = m.chat.type === 'chat' && m.chat.chatType === 'channel'
+  const from = privateChat || channel || m.isOutgoing || m.sender.id === m.chat.id ? '' : nameOf(m.sender)
+  return {
+    id: m.id,
+    out: m.isOutgoing,
+    from,
+    text: preview(m),
+    date: m.date.getTime(),
+    buttons: actions.map((action, i) => ({ label: labels[i] ?? action.label, action })),
+    card: {
+      key: `${m.chat.id}:${m.id}`, chatId: m.chat.id, msgId: m.id, from: nameOf(m.chat), isBot: !!m.sender.isBot || channel,
+      text: clean(m.text), date: m.date.getTime(), actions, receivedAt: 0,
+      ...(privateChat ? {} : channel ? { readOnly: true } : { replyTo: m.id }),
+    },
   }
 }

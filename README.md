@@ -15,7 +15,7 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 ## What Ack does
 
 - **Every bot, nothing to set up.** Ack signs in as you (your own Telegram account, from your phone) and turns any bot message with buttons into a card on the lens. BotFather, your agent, your deploy bot, your price alerts: all of them work as they are.
-- **One tap.** Swipe to pick, tap to press. The bot's answer appears in the card header, and when the bot edits its message, the card follows.
+- **One tap.** Swipe to pick, tap to press. The bot's answer appears in the card header, and when the bot edits its message, the card follows. When the bot answers with a new message instead, that message replaces the card, so a button is never pressed twice.
 - **Safe by design.**
   - Every press runs on a 1.5 s countdown you can undo with a double tap.
   - Buttons a bot marks `danger` always ask for an explicit yes and show what the card is about.
@@ -25,7 +25,15 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 - **People too, without becoming a chat client.** Only the people you pick come to the glasses, in the same queue. You answer with your quick replies or by voice.
 - **Bot command menus from the lens.** Tap the empty lens to see your bots, pick one, then pick a command from its "/" menu: `/mybots`, `/deploy`, `/status`...
 - **Voice when it is faster.** Hold, speak, release: "deny it" presses Deny. Anything else is sent as a message once you confirm. Transcription uses your own Groq or OpenAI key, kept on your phone.
-- **The phone page** mirrors the lens to scale and keeps a log of every decision (who asked, what you pressed, what the bot answered). It also shows the message-to-lens latency measured on every card.
+- **A phone app in Even's own design language.** It follows Even's published app guidelines (colours, type scale, spacing, official pixel icons) and has three tabs:
+  - **Lens**: the lens drawn to scale, which you can drive from the phone with tap, double tap and swipes when the glasses are not at hand, plus the log of every decision and the message-to-lens latency measured on every card.
+  - **Chats**: your Telegram chats with avatars, unread counts, search and filters. Open one to read it, send a message or press a bot's buttons; a button the bot marks dangerous takes a second tap, as on the lens. One switch per person, group or channel sends their messages to the glasses.
+  - **Settings**: quick replies, bots that skip the countdown, voice.
+- **Sign in with a QR code** scanned from Telegram on another device, or with your phone number.
+
+| Sign in | Lens | Chats | Chat | Settings |
+| --- | --- | --- | --- | --- |
+| ![Sign in](docs/phone/1-sign-in.png) | ![Lens tab](docs/phone/2-lens.png) | ![Chats tab](docs/phone/3-chats.png) | ![A bot chat](docs/phone/4-chat.png) | ![Settings](docs/phone/5-settings.png) |
 
 | Undo countdown | The bot answered | Danger needs a yes |
 | --- | --- | --- |
@@ -59,8 +67,8 @@ On Linux the simulator needs WebKitGTK: `sudo apt install libwebkit2gtk-4.1-0`.
 ## Use it with your Telegram account
 
 1. Get an API ID and hash at [my.telegram.org](https://my.telegram.org) ("API development tools").
-2. Either put them in `.env.local` (copy `.env.example`), or type them in the Ack page on your phone.
-3. Enter your phone number, then the code Telegram sends you. The session is stored on your phone only.
+2. Either put them in `.env.local` (copy `.env.example`; the dev server reads it, production builds never include it), or type them in the Ack page on your phone.
+3. Scan the QR code on the Ack page with Telegram on another device (Settings, Devices, Link Desktop Device), or enter your phone number and the code Telegram sends you. The session is stored on your phone only.
 4. To see bot buttons right away, run the real demo bot. It uses Bot API 9.4 button styles:
 
    ```bash
@@ -74,7 +82,7 @@ On the glasses: `npm run pack` builds `ack.ehpk` (443 kB) for the Even Hub porta
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 46 unit tests, production build
+npm run verify   # types, 61 unit tests, production build, no API key in the build
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -116,31 +124,33 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 
 | What | Where |
 | --- | --- |
-| User account login (phone, code, 2FA) over MTProto | `src/telegram.ts:35` |
-| New, edited and deleted messages, live | `src/telegram.ts:41-43` |
-| Pending bot questions brought back on start (dialogs) | `src/telegram.ts:47` |
-| Press an inline button: `messages.getBotCallbackAnswer` | `src/telegram.ts:93` |
-| Reply keyboards and quick replies: send text | `src/telegram.ts:90` |
-| Bot command menus (`botInfo.commands`) | `src/telegram.ts:111` |
-| Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:80-84` |
-| Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:66` |
-| Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:88` |
-| Callback toasts and alerts | `src/app.ts:206` |
-| Rich messages | `src/telegram.ts:75` |
+| User account login over MTProto: phone, code and 2FA, or QR code (`auth.exportLoginToken`) | `src/telegram.ts:45-47` |
+| New, edited and deleted messages, live | `src/telegram.ts:50-52` |
+| Pending bot questions brought back on start, and the phone's chat list (dialogs) | `src/telegram.ts:58`, `src/telegram.ts:82` |
+| Chat history and read state (`messages.getHistory`, `messages.readHistory`) | `src/telegram.ts:88-89` |
+| Profile photos for avatars (file download) | `src/telegram.ts:99` |
+| Press an inline button: `messages.getBotCallbackAnswer` | `src/telegram.ts:125` |
+| Reply keyboards, quick replies and messages: send text | `src/telegram.ts:130` |
+| Bot command menus (`botInfo.commands`) | `src/telegram.ts:143` |
+| Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:82-85` |
+| Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:68` |
+| Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:90` |
+| Callback toasts and alerts | `src/app.ts:222` |
+| Rich messages | `src/cards-from.ts:65` |
 
 ### Even Hub SDK features used
 
 | What | Where |
 | --- | --- |
 | Text and list containers, one page system with header, body and gesture hints | `src/app.ts`, `src/glasses.ts:65` |
-| In-place text updates (`textContainerUpgrade`) when only texts change, else rebuild | `src/glasses.ts:128` |
+| In-place text updates (`textContainerUpgrade`) when only texts change, else rebuild | `src/glasses.ts:137` |
 | Native list selection, swipe handled by firmware | `src/glasses.ts:36` |
 | Long press and release for voice (SDK 0.0.14+) | `src/glasses.ts:54` |
 | Ring vs temple source on taps | `src/glasses.ts:28` |
-| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:157` |
+| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:169` |
 | Text brightness levels (`textColor`) for hierarchy | `src/app.ts` |
-| Glasses microphone (`audioControl`) | `src/glasses.ts:141` |
-| Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:142` |
+| Glasses microphone (`audioControl`) | `src/glasses.ts:145` |
+| Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:146` |
 | Serialized bridge calls with a timeout | `src/glasses.ts:103` |
 
 ### Design rules on the lens
@@ -157,7 +167,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 - Ack only sees what your account already sees. People's messages reach the glasses only for the chats you pick.
 - Each press can be undone for 1.5 s, and bots you trust can skip the countdown in settings. Buttons a bot marks dangerous always ask for confirmation.
 - Voice audio is captured only while you hold. It goes straight from your phone to the transcription service you chose, with your own key.
-- The repository holds no secrets: Telegram API keys come from `.env.local` or from your phone.
+- The repository and the build hold no secrets: Telegram API keys come from `.env.local` (dev server only) or from your phone, and `npm run verify` and `npm run pack` fail if a key ever lands in the build.
 
 ## Project layout
 
@@ -168,14 +178,15 @@ src/glasses.ts    pages to SDK containers, event parsing, serialized bridge
 src/telegram.ts   live account over MTProto (mtcute)
 src/demo.ts       scripted bots for the no-account demo
 src/voice.ts      glasses mic to WAV to transcription
-src/phone.ts      the phone page
+src/phone.ts      the phone app: sign in (QR or phone), Lens, Chats, chat view, Settings
+src/icons/        official Even app icons used by the phone app
 scripts/e2e.mjs   end-to-end checks on the simulator
 tools/demo-bot.mjs  a real Telegram bot with styled buttons
 ```
 
 ## Built during the hackathon
 
-Everything in this repository was written from 23 Nov 2026. It started from the official `minimal` template of [evenhub-templates](https://github.com/even-realities/evenhub-templates) (first commit), and it uses these open-source libraries: [mtcute](https://github.com/mtcute/mtcute) (MIT), `@evenrealities/even_hub_sdk`, `@evenrealities/pretext`, Vite, TypeScript and Vitest.
+Everything in this repository was written from 23 Nov 2026. It started from the official `minimal` template of [evenhub-templates](https://github.com/even-realities/evenhub-templates) (first commit), and it uses these open-source libraries: [mtcute](https://github.com/mtcute/mtcute) (MIT), [uqr](https://github.com/unjs/uqr) (MIT) for the sign-in QR code, `@evenrealities/even_hub_sdk`, `@evenrealities/pretext`, Vite, TypeScript and Vitest. The phone app follows Even's published design guidelines, and its 21 icons are official Even app icons taken from [evenhub-app-ui](https://github.com/JustinasLa/evenhub-app-ui) (MIT, notice in `src/icons/`).
 
 ## License
 

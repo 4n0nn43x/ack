@@ -2,6 +2,7 @@
 // after a press and answer with a toast), so anyone can try Ack without an account.
 import type { BotRef, Command, PressResult, Source } from './app'
 import { clean, type Action, type Card, type Style } from './cards'
+import type { Bubble, ChatRow } from './cards-from'
 
 type Btn = [label: string, next: string, style?: Style] | [label: string, url: { url: string }]
 interface Screen { text: string; buttons: Btn[][]; toast?: string }
@@ -75,6 +76,8 @@ export class DemoSource implements Source {
   private msg = Date.now() % 1_000_000_000 // unique per run, so cards dismissed in an earlier run do not hide new ones
   private state = new Map<string, { bot: Bot; screen: string }>()
   private timers: number[] = []
+  private logs = new Map<number, Bubble[]>() // what the phone's chat view shows, per chat
+  onActivity: (chatId: number) => void = () => {}
 
   constructor(private sink: (c: Card) => void, private replies: () => Action[]) {}
 
@@ -97,33 +100,67 @@ export class DemoSource implements Source {
   private post(bot: Bot, screen: string) {
     const id = this.msg++
     this.state.set(`${bot.id}:${id}`, { bot, screen })
-    this.sink(this.card(bot, screen, id))
+    this.show(this.card(bot, screen, id), labels(bot, screen))
   }
 
   private alex() {
-    this.sink({ key: `${ALEX}:${this.msg}`, chatId: ALEX, msgId: this.msg++, from: 'Alex', isBot: false, text: 'Still on for 7pm? I booked the table at Zuma.', date: Date.now(), actions: this.replies(), receivedAt: performance.now() })
+    const c: Card = { key: `${ALEX}:${this.msg}`, chatId: ALEX, msgId: this.msg++, from: 'Alex', isBot: false, text: 'Still on for 7pm? I booked the table at Zuma.', date: Date.now(), actions: this.replies(), receivedAt: performance.now() }
+    this.show(c, c.actions.map(a => a.value ?? a.label))
+  }
+
+  /** Sends a card to the lens and keeps it in that chat's history for the phone (an edit replaces the message). */
+  private show(c: Card, raw: string[]) {
+    this.keep({ id: c.msgId, out: false, from: '', text: c.text, date: c.date, buttons: c.actions.map((action, i) => ({ label: raw[i] ?? action.label, action })), card: c })
+    this.sink(c)
+  }
+
+  private keep(b: Bubble) {
+    const list = this.logs.get(b.card.chatId) ?? []
+    const i = list.findIndex(x => x.id === b.id && x.out === b.out)
+    if (i >= 0) list[i] = b
+    else list.push(b)
+    this.logs.set(b.card.chatId, list)
+    this.onActivity(b.card.chatId)
+  }
+
+  private mine(chatId: number, text: string) {
+    const card: Card = { key: `${chatId}:${this.msg}`, chatId, msgId: this.msg++, from: 'You', isBot: false, text, date: Date.now(), actions: [], receivedAt: 0 }
+    this.keep({ id: card.msgId, out: true, from: '', text, date: card.date, buttons: [], card })
   }
 
   async press(card: Card, action: Action): Promise<PressResult> {
     await wait(250 + Math.random() * 250) // a real bot takes a moment
-    if (action.kind === 'text') return {}
+    if (action.kind === 'text') { this.mine(card.chatId, action.value ?? action.label); return {} }
     const st = this.state.get(card.key)
     if (!st) throw new Error('MESSAGE_ID_INVALID')
     const next = new TextDecoder().decode(action.data)
     st.screen = next
-    window.setTimeout(() => this.sink({ ...this.card(st.bot, next, card.msgId), date: card.date }), 120)
+    window.setTimeout(() => this.show({ ...this.card(st.bot, next, card.msgId), date: card.date }, labels(st.bot, next)), 120)
     return { toast: st.bot.screens[next].toast }
   }
 
   async send(chatId: number, text: string) {
     await wait(200)
+    this.mine(chatId, text)
     const bot = BOTS.find(b => b.id === chatId)
     const screen = bot?.onCommand?.[text.replace(/^\//, '').split(' ')[0]]
     if (bot && screen) window.setTimeout(() => this.post(bot, screen), 500)
   }
 
   async bots(): Promise<BotRef[]> { return BOTS.map(b => ({ id: b.id, name: b.name })) }
+
+  async chats(): Promise<ChatRow[]> {
+    const last = (id: number) => this.logs.get(id)?.at(-1)
+    const all: Pick<ChatRow, 'id' | 'name' | 'kind'>[] = [...BOTS.map(b => ({ id: b.id, name: b.name, kind: 'bot' as const })), { id: ALEX, name: 'Alex', kind: 'person' }]
+    return all
+      .map(r => ({ ...r, preview: last(r.id)?.text.split('\n')[0] ?? '', date: last(r.id)?.date ?? 0, unread: 0 }))
+      .sort((a, b) => b.date - a.date)
+  }
+
+  async history(chatId: number): Promise<Bubble[]> { return this.logs.get(chatId) ?? [] }
+  async avatar(): Promise<string | null> { return null }
   async commands(botId: number) { return BOTS.find(b => b.id === botId)?.commands ?? [] }
 }
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
+const labels = (bot: Bot, screen: string) => bot.screens[screen].buttons.flat().map(b => b[0])

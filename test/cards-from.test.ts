@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardFrom, type MsgLike } from '../src/cards-from'
+import { bubbleFrom, cardFrom, idScope, preview, type MsgLike } from '../src/cards-from'
 import { replies } from '../src/cards'
 
 const me = replies(['Yes', 'Later'])
@@ -56,5 +56,39 @@ describe('which messages become cards', () => {
   it('names media and rich messages instead of showing nothing', () => {
     expect(cardFrom(msg({ text: '', media: { type: 'photo' } }), [], me)!.text).toBe('[photo]')
     expect(cardFrom(msg({ text: '', richMessage: {} }), [], me)!.text).toContain('rich message')
+  })
+})
+
+describe('deleted messages find the right card', () => {
+  it('private chats and basic groups share one id sequence, supergroups and channels have their own', () => {
+    expect(idScope(bot)).toBe(0)
+    expect(idScope(alex)).toBe(0)
+    expect(idScope({ type: 'chat', id: -42, displayName: 'Family', chatType: 'group' })).toBe(0)
+    expect(idScope(team)).toBe(-100500)
+    expect(idScope(news)).toBe(-100900)
+  })
+})
+
+describe('phone chat view', () => {
+  it('keeps the original text and button labels, and the parsed action to press', () => {
+    const b = bubbleFrom(msg({ text: 'Deploy v2? 🚀', markup: inline }))
+    expect(b).toMatchObject({ id: 7, out: false, from: '', text: 'Deploy v2? 🚀' })
+    expect(b.buttons.map(x => [x.label, x.action.kind, x.action.style])).toEqual([['✅ Deploy', 'callback', 'danger']])
+    expect(b.card).toMatchObject({ key: '10:7', chatId: 10, msgId: 7, isBot: true })
+  })
+
+  it('names the sender in groups and answers there as a reply', () => {
+    const b = bubbleFrom(msg({ chat: team, sender: alex }))
+    expect(b.from).toBe('Alex')
+    expect(b.card.replyTo).toBe(7)
+  })
+
+  it('my own messages have no sender line', () => {
+    expect(bubbleFrom(msg({ chat: team, sender: alex, isOutgoing: true }))).toMatchObject({ out: true, from: '' })
+  })
+
+  it('previews media and rich messages in one line', () => {
+    expect(preview({ text: '', media: { type: 'voice' }, richMessage: undefined })).toBe('[voice]')
+    expect(preview({ text: '', media: null, richMessage: {} })).toBe('[rich message]')
   })
 })
