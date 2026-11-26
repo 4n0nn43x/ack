@@ -38,6 +38,7 @@ export interface Deps {
   onLatency?(ms: number): void
   onDemo?(): void
   onChange?(): void
+  onSeen?(c: Card): void // a card was drawn on the lens: Telegram read receipt, or a sponsored message's view
 }
 
 type Item = { label: string; run: () => void }
@@ -371,8 +372,10 @@ export class App {
     const c = this.card
     const live = this.view.v === 'card' && c && !this.shown.has(c.key) ? c : undefined
     if (live) this.shown.add(live.key)
+    const seen = this.view.v === 'card' ? c : undefined
     void this.d.draw(page, force).then(ok => {
       if (ok && live) this.d.onLatency?.(this.d.perf() - live.receivedAt)
+      if (ok && seen) this.d.onSeen?.(seen)
     })
     this.d.onChange?.()
   }

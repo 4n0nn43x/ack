@@ -3,7 +3,7 @@
 import { renderSVG } from 'uqr'
 import type { LogEntry } from './app'
 import type { Action } from './cards'
-import type { Bubble, ChatKind, ChatRow } from './cards-from'
+import { adNeedsConfirm, type Bubble, type ChatKind, type ChatRow, type Sponsored } from './cards-from'
 import type { Input, Page } from './glasses'
 import { PROVIDERS, type Provider } from './voice'
 import { shortAddress, type WalletView } from './wallet'
@@ -33,6 +33,9 @@ export interface Handlers {
   press(b: Bubble, a: Action): Promise<string | undefined> // resolves with the bot's answer, if any
   send(chatId: number, text: string): Promise<void>
   avatar(chatId: number): Promise<string | null>
+  ads(chatId: number): Promise<Sponsored[]> // Telegram's official sponsored messages for a channel or a bot
+  adSeen(random: Uint8Array): void
+  adClick(random: Uint8Array): void
 }
 
 export interface Pick { id: number; name: string }
@@ -227,7 +230,7 @@ export class Phone {
          <button id="qrgo" class="btn dark">${icon('qr')}<span>Show my QR code</span></button>`
     el.innerHTML = `
       <div class="hero"><h2>Every Telegram bot button, one tap on your glasses.</h2>
-        <p>Ack signs in as you. Your session stays on this phone.</p></div>
+        <p>Ack is an unofficial Telegram client built on the Telegram API. It signs in as you, and your session stays on this phone.</p></div>
       ${keys}
       <div class="card form">
         <div class="seg" role="tablist">
@@ -465,6 +468,45 @@ export class Phone {
     this.bindBubbles()
     el.scrollTop = el.scrollHeight
     window.scrollTo({ top: document.body.scrollHeight })
+    void this.showAd(c)
+  }
+
+  /**
+   * Telegram's official sponsored message (API terms 3.3): below the last post in a channel, as a bar
+   * above a bot chat. Counted as viewed once its whole text is on screen; links outside Telegram ask first.
+   */
+  private async showAd(c: ChatRow) {
+    if (c.kind !== 'channel' && c.kind !== 'bot') return
+    const ad = (await this.h.ads(c.id).catch(() => []))[0]
+    const v = this.view
+    if (!ad || v.v !== 'chat' || v.chat.id !== c.id) return
+    this.root.querySelector('.ad')?.remove()
+    const bot = c.kind === 'bot'
+    const box = document.createElement('div')
+    box.className = bot ? 'card ad bar' : 'msg in ad'
+    box.innerHTML = `
+      <div class="from">${bot ? `<span class="tag">${ad.label === 'Recommended' ? 'Recommended' : 'Ad'}</span> ` : ''}${esc(ad.title)}</div>
+      <div class="text">${esc(ad.text)}</div>
+      ${bot ? '' : `<div class="time">${ad.label}</div>`}
+      ${ad.info ? `<details class="info"><summary>Sponsor info</summary>${esc(ad.info)}</details>` : ''}
+      <div class="kbd"><button class="kb link">${esc(ad.button || 'Open')}</button></div>`
+    if (bot) $(this.root, '#msgs').before(box)
+    else $(this.root, '#msgs').append(box)
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); this.h.adSeen(ad.random) } }, { threshold: 1 })
+    io.observe($(box, '.text'))
+    const btn = $<HTMLButtonElement>(box, '.kb')
+    let armed = false
+    btn.onclick = () => {
+      if (adNeedsConfirm(ad.url) && !armed) {
+        armed = true
+        btn.textContent = `Open ${URL.canParse(ad.url) ? new URL(ad.url).hostname : 'this link'}? Tap again`
+        btn.classList.add('armed')
+        window.setTimeout(() => { armed = false; btn.textContent = ad.button || 'Open'; btn.classList.remove('armed') }, 3000)
+        return
+      }
+      this.h.adClick(ad.random)
+      window.open(ad.url, '_blank', 'noopener')
+    }
   }
 
   private bubbleHtml(): string {

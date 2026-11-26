@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bubbleFrom, cardFrom, idScope, preview, type MsgLike } from '../src/cards-from'
+import { adCard, adNeedsConfirm, bubbleFrom, cardFrom, idScope, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type MsgLike } from '../src/cards-from'
 import { replies } from '../src/cards'
 
 const me = replies(['Yes', 'Later'])
@@ -90,5 +90,104 @@ describe('phone chat view', () => {
   it('previews media and rich messages in one line', () => {
     expect(preview({ text: '', media: { type: 'voice' }, richMessage: undefined })).toBe('[voice]')
     expect(preview({ text: '', media: null, richMessage: {} })).toBe('[rich message]')
+  })
+})
+
+describe('names on the lens', () => {
+  it('never shows a bare id when a peer has no usable display name', () => {
+    expect(nameOf({ type: 'user', id: 42, displayName: '12345' })).toBe('User 42')
+    expect(nameOf({ type: 'chat', id: -100500, displayName: '98765', chatType: 'supergroup' })).toBe('Group 100500')
+    expect(nameOf({ type: 'user', id: 42 })).toBe('User 42')
+  })
+
+  it('falls back to the username or the first and last name', () => {
+    expect(nameOf({ type: 'user', id: 42, displayName: '12345', username: 'alex' })).toBe('@alex')
+    expect(nameOf({ type: 'user', id: 42, displayName: '', firstName: 'Alex', lastName: 'Dupont' })).toBe('Alex Dupont')
+    expect(nameOf({ type: 'user', id: 10, isBot: true, displayName: '12345', username: 'ci_bot' })).toBe('@ci_bot')
+    expect(nameOf({ type: 'user', id: 10, isBot: true, displayName: 'CI' })).toBe('@CI')
+  })
+
+  it('keeps group headers readable on cards when peers are incomplete', () => {
+    const c = cardFrom(msg({
+      chat: { type: 'chat', id: -100500, displayName: '98765', chatType: 'supergroup' },
+      sender: { type: 'user', id: 42, displayName: '12345' },
+    }), [-100500], me)!
+    expect(c.from).toBe('User 42 · Group 100500')
+  })
+})
+
+describe('which dialogs come back on start', () => {
+  const base = { incoming: true, ageMs: 1000, unread: 0, hasButtons: false, followed: false }
+
+  it('a fresh bot question comes through', () => {
+    expect(shouldSurface({ ...base, kind: 'bot', hasButtons: true })).toBe(true)
+  })
+
+  it('an old bot question does not', () => {
+    expect(shouldSurface({ ...base, kind: 'bot', hasButtons: true, ageMs: 49 * 3600_000 })).toBe(false)
+  })
+
+  it('a person already read still comes when followed', () => {
+    expect(shouldSurface({ ...base, kind: 'person', followed: true })).toBe(true)
+  })
+
+  it('an old group still comes when followed', () => {
+    expect(shouldSurface({ ...base, kind: 'group', followed: true, ageMs: 30 * 24 * 3600_000 })).toBe(true)
+  })
+
+  it('an unfollowed channel never comes', () => {
+    expect(shouldSurface({ ...base, kind: 'channel', unread: 5 })).toBe(false)
+  })
+
+  it('my own last message never comes', () => {
+    expect(shouldSurface({ ...base, kind: 'person', followed: true, incoming: false })).toBe(false)
+  })
+})
+
+describe('what a followed chat is waiting on', () => {
+  const m = (id: number, isOutgoing: boolean, isService = false) => ({ id, isOutgoing, isService })
+
+  it('their newest message, when it is theirs', () => {
+    expect(waitingIn([m(3, false), m(2, false), m(1, true)])?.id).toBe(3)
+  })
+
+  it('nothing once I answered, even from the phone', () => {
+    expect(waitingIn([m(3, true), m(2, false)])).toBeUndefined()
+  })
+
+  it('looks past service messages', () => {
+    expect(waitingIn([m(4, false, true), m(3, false)])?.id).toBe(3)
+    expect(waitingIn([m(4, false, true), m(3, true)])).toBeUndefined()
+  })
+})
+
+describe('Telegram sponsored messages (API terms 3.3)', () => {
+  const raw = (over = {}) => ({ _: 'sponsoredMessage', randomId: new Uint8Array([1, 2, 255]), url: 'https://t.me/durov', title: 'Durov', message: 'Ads on Telegram', buttonText: 'Open channel', ...over })
+
+  it('reads the ads, and none from an empty answer', () => {
+    expect(sponsoredFrom({ _: 'messages.sponsoredMessagesEmpty' })).toEqual([])
+    const [ad] = sponsoredFrom({ _: 'messages.sponsoredMessages', messages: [raw({ sponsorInfo: 'Ad by X', additionalInfo: 'ERID 123' })] })
+    expect(ad).toMatchObject({ label: 'Sponsored', title: 'Durov', button: 'Open channel', info: 'Ad by X\nERID 123' })
+  })
+
+  it('says Recommended instead of Sponsored when Telegram flags it', () => {
+    expect(sponsoredFrom({ _: 'messages.sponsoredMessages', messages: [raw({ recommended: true })] })[0].label).toBe('Recommended')
+  })
+
+  it('opens Telegram links directly, asks before any other host', () => {
+    expect(adNeedsConfirm('https://t.me/durov')).toBe(false)
+    expect(adNeedsConfirm('https://fragment.com/username/ack')).toBe(false)
+    expect(adNeedsConfirm('https://core.telegram.org/api')).toBe(false)
+    expect(adNeedsConfirm('https://example.com/promo')).toBe(true)
+    expect(adNeedsConfirm('https://t.me.evil.com/')).toBe(true)
+    expect(adNeedsConfirm('not a url')).toBe(true)
+  })
+
+  it('becomes a read-only lens card labelled as an ad, never a button Ack presses', () => {
+    const [ad] = sponsoredFrom({ _: 'messages.sponsoredMessages', messages: [raw()] })
+    const c = adCard(-100, 'Durov News', ad, 5)
+    expect(c).toMatchObject({ key: 'ad:-100:0102ff', from: 'Durov News · Sponsored', readOnly: true, text: 'Durov\nAds on Telegram' })
+    expect(c.actions.map(a => a.kind)).toEqual(['phone', 'dismiss'])
+    expect(c.ad).toBe(ad.random)
   })
 })

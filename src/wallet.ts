@@ -1,7 +1,7 @@
 // Gram, Telegram's native TON wallet: money received and connection requests as lens cards,
 // and a read-only view of the balance. Ack never signs or sends anything from the wallet.
 import { clean, type Card } from './cards'
-import type { MsgLike } from './cards-from'
+import { nameOf, type MsgLike } from './cards-from'
 
 export interface WalletTx { id: string; incoming: boolean; amount: string; peer: string; comment: string; date: number; failed: boolean }
 export interface WalletView { balance: string; address: string; txs: WalletTx[] }
@@ -61,7 +61,7 @@ export function walletCard(m: MsgLike, now: number): Card | null {
   const base = { key: `${m.chat.id}:${m.id}`, chatId: m.chat.id, msgId: m.id, date: m.date.getTime() }
   if (a._ === 'messageActionGramTransfer') {
     if (m.isOutgoing || m.chat.type !== 'user' || !a.amount) return null
-    return transferCard(base, m.chat.displayName, a.amount, a.comment, a.commentEncrypted)
+    return transferCard(base, nameOf(m.chat), a.amount, a.comment, a.commentEncrypted)
   }
   if (a._ === 'messageActionWalletTonConnectRequest') {
     const expires = (a.expires ?? 0) * 1000

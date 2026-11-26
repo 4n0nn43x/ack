@@ -18,7 +18,17 @@ export interface Bubble {
   card: Card // what Source.press needs to press one of the buttons
 }
 
-interface PeerLike { type: string; id: number; isBot?: boolean; username?: string | null; displayName: string; chatType?: string }
+export interface PeerLike {
+  type: string
+  id: number
+  isBot?: boolean
+  username?: string | null
+  displayName?: string | null
+  title?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  chatType?: string
+}
 
 /** The fields of an mtcute Message that Ack reads. */
 export interface MsgLike {
@@ -35,7 +45,84 @@ export interface MsgLike {
   raw?: unknown // the TL message, read for wallet service actions
 }
 
-const nameOf = (p: PeerLike) => (p.isBot ? `@${p.username ?? p.displayName}` : p.displayName)
+const at = (s: string) => (s.startsWith('@') ? s : `@${s}`)
+
+/** A name we can show: never a bare numeric Telegram id, even when the peer is incomplete. */
+const usable = (s?: string | null): s is string => typeof s === 'string' && !!s.trim() && !/^[-+]?\d+$/.test(s.trim())
+
+const kindLabel = (p: PeerLike) => p.isBot ? 'Bot' : p.type === 'user' ? 'User' : p.chatType === 'channel' ? 'Channel' : p.type === 'chat' ? 'Group' : 'Chat'
+
+/** Best display name for a peer, with a readable fallback instead of an id. */
+export function nameOf(p: PeerLike): string {
+  if (p.isBot && usable(p.username)) return at(p.username!.trim())
+  const full = usable(p.firstName) ? `${p.firstName!.trim()}${usable(p.lastName) ? ` ${p.lastName!.trim()}` : ''}` : ''
+  const name = [p.displayName, p.title, full].find(usable)
+  if (name) return p.isBot ? at(name!.trim()) : name!.trim()
+  if (usable(p.username)) return at(p.username!.trim())
+  return `${kindLabel(p)} ${Math.abs(p.id)}`
+}
+
+/**
+ * The message a followed chat is waiting on: its newest one, and only if it came from them.
+ * `msgs` is newest first (mtcute getHistory). Once I answered, nothing is waiting.
+ */
+export function waitingIn<T extends { isOutgoing: boolean; isService: boolean }>(msgs: T[]): T | undefined {
+  const m = msgs.find(x => !x.isService)
+  return m && !m.isOutgoing ? m : undefined
+}
+
+/** One official Telegram sponsored message, as the API terms (3.3) require clients to show in channels and bots. */
+export interface Sponsored { random: Uint8Array; label: 'Sponsored' | 'Recommended'; title: string; text: string; button: string; url: string; info: string }
+
+interface RawSponsored { _: string; recommended?: boolean; randomId: Uint8Array; url: string; title: string; message: string; buttonText: string; sponsorInfo?: string; additionalInfo?: string }
+
+/** messages.getSponsoredMessages to what Ack shows. An empty answer means no ad. */
+export function sponsoredFrom(r: { _: string; messages?: RawSponsored[] }): Sponsored[] {
+  return (r.messages ?? []).filter(m => m._ === 'sponsoredMessage').map(m => ({
+    random: m.randomId, label: m.recommended ? 'Recommended' : 'Sponsored', title: m.title, text: m.message,
+    button: m.buttonText, url: m.url, info: [m.sponsorInfo, m.additionalInfo].filter(Boolean).join('\n'),
+  }))
+}
+
+/** Telegram's own hosts open without a confirmation; any other link asks first (sponsored messages spec). */
+const TG_HOSTS = /(^|\.)(telegram\.(org|me|dog)|t\.me|te\.?legra\.ph|graph\.org|fragment\.com|telesco\.pe)$/
+export function adNeedsConfirm(url: string): boolean {
+  try { return !TG_HOSTS.test(new URL(url).hostname) } catch { return true }
+}
+
+/** A channel's sponsored message as a lens card, right after that channel's post. */
+export function adCard(chatId: number, channel: string, ad: Sponsored, now: number): Card {
+  const id = [...ad.random].map(b => b.toString(16).padStart(2, '0')).join('')
+  return {
+    key: `ad:${chatId}:${id}`, chatId, msgId: 0, from: `${channel} · ${ad.label}`, isBot: true, readOnly: true,
+    text: clean(`${ad.title}\n${ad.text}`), date: now, receivedAt: performance.now(), ad: ad.random,
+    actions: [{ label: clean(ad.button) || 'Open', kind: 'phone', value: ad.url }, { label: 'OK', kind: 'dismiss' }],
+  }
+}
+
+/** How long a bot question stays worth resurfacing on start. */
+export const FRESH_MS = 48 * 3600_000
+
+export interface SurfaceInput {
+  kind: ChatKind
+  incoming: boolean
+  ageMs: number
+  unread: number
+  hasButtons: boolean
+  followed: boolean
+}
+
+/**
+ * Whether a dialog's last message goes to the lens. Followed people, groups and channels always
+ * come, read or old: that is what the "On my glasses" switch means. Other chats only surface
+ * fresh bot questions.
+ */
+export function shouldSurface(d: SurfaceInput): boolean {
+  if (!d.incoming) return false
+  if (d.followed) return true
+  if (d.kind !== 'bot' || d.ageMs > FRESH_MS) return false
+  return d.hasButtons || d.unread > 0
+}
 
 /**
  * Where a message id is unique. Private chats and basic groups share one id sequence (scope 0);
@@ -67,7 +154,7 @@ export function cardFrom(m: MsgLike, follow: number[], replies: Action[]): Card 
   const media = (m.media as { type?: string } | null)?.type
   const text = clean(m.text) || (media ? `[${media}]` : m.richMessage ? '[rich message, open it on your phone]' : '')
   const sender = m.sender.id === m.chat.id ? '' : nameOf(m.sender)
-  const from = privateChat ? nameOf(m.chat) : sender ? `${sender} · ${m.chat.displayName}` : m.chat.displayName
+  const from = privateChat ? nameOf(m.chat) : sender ? `${sender} · ${nameOf(m.chat)}` : nameOf(m.chat)
 
   return {
     key: `${m.chat.id}:${m.id}`,

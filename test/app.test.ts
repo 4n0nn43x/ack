@@ -377,3 +377,23 @@ describe('Gram wallet on the lens', () => {
     expect(last().list!.items[0]).toBe('Gram wallet · 142.75 GRAM')
   })
 })
+
+describe('what the lens really showed', () => {
+  it('tells the source which card the lens really drew: read receipts and ad views', async () => {
+    const seen: Card[] = []
+    app = new App(deps({ onSeen: c => seen.push(c) }), { instant: [], muted: {}, replies: ['Yes'] })
+    app.setSource(source)
+    app.upsert(card(1, [act('OK')]))
+    app.upsert(card(2, [act('OK')]))
+    await flush()
+    expect(new Set(seen.map(c => c.msgId))).toEqual(new Set([1])) // the queued card was not drawn: not read (the source dedups redraws)
+    const random = new Uint8Array([9, 9])
+    app.input({ type: 'double', ring: false })
+    await flush()
+    expect(new Set(seen.map(c => c.msgId))).toEqual(new Set([1, 2]))
+    app.input({ type: 'double', ring: false })
+    app.upsert({ ...card(3, [{ label: 'Open', kind: 'phone', value: 'https://t.me/x' }], 'Durov\nAds on Telegram'), ad: random, readOnly: true })
+    await flush()
+    expect(seen[seen.length - 1].ad).toBe(random)
+  })
+})
