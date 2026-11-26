@@ -440,3 +440,22 @@ describe('a bot opened from the lens', () => {
     expect(lens()).toContain('No messages from this bot yet.')
   })
 })
+
+describe('a long bot list', () => {
+  it('pages, so every bot stays reachable from the lens', async () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({ id: 100 + i, name: `Bot ${i}` }))
+    app.setSource({ ...source, bots: async () => many })
+    app.input({ type: 'click', ring: false })
+    await flush()
+    const first = last().list!.items
+    expect(first).toHaveLength(19)
+    expect(first[18]).toBe('More bots (7)')
+    app.input({ type: 'select', index: 18 })
+    expect(last().list!.items).toEqual(many.slice(18).map(b => b.name))
+    expect(last().texts[0].text).toBe('Your bots · 19 to 25')
+    app.input({ type: 'double', ring: false })
+    expect(last().list!.items[0]).toBe('Bot 0')
+    app.input({ type: 'double', ring: false })
+    expect(lens()).toContain('Nothing waiting')
+  })
+})

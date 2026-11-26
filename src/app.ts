@@ -52,7 +52,7 @@ type View =
   | { v: 'pending'; a: Action; key: string; left: number }
   | { v: 'wait'; a: Action; toast?: string }
   | { v: 'note'; text: string; head?: string }
-  | { v: 'bots'; bots: BotRef[] }
+  | { v: 'bots'; bots: BotRef[]; from?: number }
   | { v: 'cmds'; bot: BotRef; cmds: Command[] }
   | { v: 'bot'; bot: BotRef; cards: Card[]; cmds: Command[] }
   | { v: 'wallet' }
@@ -72,6 +72,7 @@ const HEAD_H = 32
 const FOOT_H = 32
 const STEP_MS = 300
 const ROW_H = 40
+const BOTS_PER_PAGE = 18 // a glasses list holds 20 rows: room for the wallet and "More bots"
 const LINE_H = 27
 const MENU = [{ id: 1, label: 'Mute this chat 1 h' }, { id: 2, label: 'Read all' }, { id: 3, label: 'Clear all cards' }]
 
@@ -167,7 +168,7 @@ export class App {
       case 'bot':
       case 'cmds':
         if (i.type === 'select') return this.items[i.index]?.run()
-        if (i.type === 'double') return v.v === 'bots' ? this.go({ v: 'root' }) : void this.openBots()
+        if (i.type === 'double') return v.v !== 'bots' ? void this.openBots() : v.from ? this.go({ ...v, from: Math.max(0, v.from - BOTS_PER_PAGE) }) : this.go({ v: 'root' })
         return
       case 'wallet':
         if (i.type === 'click' || i.type === 'double') return void this.openBots()
@@ -426,11 +427,14 @@ export class App {
         return screen(from, `"${v.text}"\n\n${v.a ? `→ ${rowLabel(v.a)}` : '→ Send it as a message'}`, 'Tap: yes   ·   Double tap: no')
       case 'bots': {
         const w = this.wallet
+        const from = v.from ?? 0
+        const rest = v.bots.length - from - BOTS_PER_PAGE
         this.items = [
-          ...(w ? [{ label: `Gram wallet · ${w.balance} GRAM`, run: () => this.go({ v: 'wallet' }) }] : []),
-          ...v.bots.slice(0, w ? 18 : 19).map(b => ({ label: b.name, run: () => void this.openBot(b) })),
+          ...(w && !from ? [{ label: `Gram wallet · ${w.balance} GRAM`, run: () => this.go({ v: 'wallet' }) }] : []),
+          ...v.bots.slice(from, from + BOTS_PER_PAGE).map(b => ({ label: b.name, run: () => void this.openBot(b) })),
+          ...(rest > 0 ? [{ label: `More bots (${rest})`, run: () => this.go({ v: 'bots', bots: v.bots, from: from + BOTS_PER_PAGE }) }] : []),
         ]
-        return listPage('Your bots', this.items)
+        return listPage(from ? `Your bots · ${from + 1} to ${Math.min(from + BOTS_PER_PAGE, v.bots.length)}` : 'Your bots', this.items)
       }
       case 'wallet':
         return this.walletPage()
