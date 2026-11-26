@@ -24,6 +24,6 @@
     "vite": "^6.4.6",
     "vitest": "^3.2.7"
   },
-  "description": "Every Telegram bot button, one tap on Even G2",
+  "description": "Your bots ask. You answer with a tap. Your phone stays in your pocket.",
   "license": "MIT"
 }

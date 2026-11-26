@@ -229,7 +229,7 @@ export class Phone {
       : `<div class="qr empty">${icon('qr', 'ic big')}</div>
          <button id="qrgo" class="btn dark">${icon('qr')}<span>Show my QR code</span></button>`
     el.innerHTML = `
-      <div class="hero"><h2>Every Telegram bot button, one tap on your glasses.</h2>
+      <div class="hero"><h2>Your bots ask. You answer with a tap. Your phone stays in your pocket.</h2>
         <p>Ack is an unofficial Telegram client built on the Telegram API. It signs in as you, and your session stays on this phone.</p></div>
       ${keys}
       <div class="card form">
