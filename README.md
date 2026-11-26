@@ -1,8 +1,10 @@
 # Ack
 
-**Your bots ask. You answer with a tap. Your phone stays in your pocket.**
+**Taking back our eyes from our phones.**
 
-Ack brings every Telegram bot to Even G2, untouched: on a real account, 21 of 21 public bots it had never seen reached the lens, and a question lands there within 60 ms of reaching your phone (Even Hub simulator, 9 to 62 ms across runs). A tap on the temple or the R1 ring presses the button.
+**Every Telegram bot, one tap away on Even G2. Your phone stays in your pocket.**
+
+On a real account, 21 of 21 public bots Ack had never seen reached the lens untouched, and a question lands there within 60 ms of reaching your phone (Even Hub simulator, 9 to 62 ms across runs). A tap on the temple or the R1 ring presses the button.
 
 Ack is an unofficial Telegram client that uses the Telegram API, and it runs entirely inside the Even app on your phone.
 
