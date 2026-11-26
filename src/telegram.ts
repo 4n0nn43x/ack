@@ -3,7 +3,7 @@
 import { TelegramClient, WebCryptoProvider, type Chat as TgChat, type Dialog, type Message, type User } from '@mtcute/web'
 import wasmUrl from '@mtcute/wasm/mtcute.wasm?url' // explicit URL: works in Vite dev and in the packed .ehpk
 import type { BotRef, Command, PressResult, Source } from './app'
-import { adCard, bubbleFrom, cardFrom, idScope, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type Bubble, type ChatKind, type ChatRow, type MsgLike, type PeerLike, type Sponsored } from './cards-from'
+import { adCard, bubbleFrom, cardFrom, idScope, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type Bubble, type ChatKind, type ChatRow, type MsgLike, type PeerLike, type Sponsored } from './cards-from'
 import { clean, type Action, type Card } from './cards'
 import { walletFrom, walletLine, type WalletView } from './wallet'
 
@@ -108,14 +108,7 @@ export class TelegramSource implements Source {
 
   /** Live peers can be partial: fill their names from the dialogs we already saw. */
   private named(m: Message): MsgLike {
-    const like = m as unknown as MsgLike
-    const chat: PeerLike = { ...like.chat }
-    const sender: PeerLike = { ...like.sender }
-    const chatName = this.recent.get(m.chat.id)?.name
-    const senderName = sender.id === undefined ? undefined : this.recent.get(sender.id)?.name
-    if (chatName) chat.displayName = chatName
-    if (senderName) sender.displayName = senderName
-    return { ...like, chat, sender }
+    return msgLike(m as unknown as MsgLike, id => this.recent.get(id)?.name)
   }
 
   /** The chat list for the phone, most recent first. */

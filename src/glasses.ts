@@ -145,3 +145,16 @@ export class Glasses {
   mic(on: boolean) { return this.run(() => this.bridge.audioControl(on, AudioInputSource.Glasses)) }
   exit() { return this.run(() => this.bridge.shutDownPageContainer(1)) }
 }
+
+/**
+ * Outside the Even app (the try-it page, or `?browser` for live tests in any browser): no glasses, the lens
+ * lives only in the phone's mirror and is driven by its remote. Never used inside the Even app or the simulator.
+ */
+export const browserBridge = {
+  createStartUpPageContainer: async () => 0,
+  rebuildPageContainer: async () => true,
+  textContainerUpgrade: async () => true,
+  audioControl: async () => true,
+  shutDownPageContainer: async () => true,
+  onEvenHubEvent: () => () => {},
+} as unknown as EvenAppBridge

@@ -52,12 +52,11 @@ const usable = (s?: string | null): s is string => typeof s === 'string' && !!s.
 
 const kindLabel = (p: PeerLike) => p.isBot ? 'Bot' : p.type === 'user' ? 'User' : p.chatType === 'channel' ? 'Channel' : p.type === 'chat' ? 'Group' : 'Chat'
 
-/** Best display name for a peer, with a readable fallback instead of an id. */
+/** Best display name for a peer, bots included, as Telegram shows it; @username, then a readable fallback, never an id. */
 export function nameOf(p: PeerLike): string {
-  if (p.isBot && usable(p.username)) return at(p.username!.trim())
   const full = usable(p.firstName) ? `${p.firstName!.trim()}${usable(p.lastName) ? ` ${p.lastName!.trim()}` : ''}` : ''
   const name = [p.displayName, p.title, full].find(usable)
-  if (name) return p.isBot ? at(name!.trim()) : name!.trim()
+  if (name) return name.trim()
   if (usable(p.username)) return at(p.username!.trim())
   return `${kindLabel(p)} ${Math.abs(p.id)}`
 }
@@ -97,6 +96,21 @@ export function adCard(chatId: number, channel: string, ad: Sponsored, now: numb
     key: `ad:${chatId}:${id}`, chatId, msgId: 0, from: `${channel} · ${ad.label}`, isBot: true, readOnly: true,
     text: clean(`${ad.title}\n${ad.text}`), date: now, receivedAt: performance.now(), ad: ad.random,
     actions: [{ label: clean(ad.button) || 'Open', kind: 'phone', value: ad.url }, { label: 'OK', kind: 'dismiss' }],
+  }
+}
+
+/**
+ * A plain copy of a live mtcute Message. Its fields are prototype getters, so `{ ...m }` would copy none
+ * of them. Names come from `names` (the dialogs already seen) when the live peer is partial.
+ */
+export function msgLike(m: MsgLike, names: (id: number) => string | undefined): MsgLike {
+  const peer = (p: PeerLike): PeerLike => ({
+    type: p.type, id: p.id, isBot: p.isBot, username: p.username, title: p.title, firstName: p.firstName,
+    lastName: p.lastName, chatType: p.chatType, displayName: names(p.id) ?? p.displayName,
+  })
+  return {
+    id: m.id, isOutgoing: m.isOutgoing, isService: m.isService, text: m.text, date: m.date, chat: peer(m.chat),
+    sender: peer(m.sender), markup: m.markup, media: m.media, richMessage: m.richMessage, raw: m.raw,
   }
 }
 

@@ -2,7 +2,7 @@ import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { App, errorText, type LogEntry } from './app'
 import { DEFAULT_REPLIES, replies, type Card } from './cards'
 import { DemoSource } from './demo'
-import { Glasses, parseEvent } from './glasses'
+import { browserBridge, Glasses, parseEvent } from './glasses'
 import { Phone, type Saved } from './phone'
 import type { TelegramSource } from './telegram'
 import { transcribe } from './voice'
@@ -50,7 +50,8 @@ const phone = new Phone(document.getElementById('app')!, saved, {
 phone.log(log)
 phone.stats(lat)
 
-const bridge = await waitForEvenAppBridge()
+const inBrowser = import.meta.env.VITE_BROWSER === '1' || new URLSearchParams(location.search).has('browser')
+const bridge = inBrowser ? browserBridge : await waitForEvenAppBridge()
 const glasses = new Glasses(bridge)
 
 const app = new App({

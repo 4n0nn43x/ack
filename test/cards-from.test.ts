@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adCard, adNeedsConfirm, bubbleFrom, cardFrom, idScope, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type MsgLike } from '../src/cards-from'
+import { adCard, adNeedsConfirm, bubbleFrom, cardFrom, idScope, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type MsgLike } from '../src/cards-from'
 import { replies } from '../src/cards'
 
 const me = replies(['Yes', 'Later'])
@@ -17,7 +17,7 @@ const msg = (over: Partial<MsgLike>): MsgLike => ({
 describe('which messages become cards', () => {
   it('a private bot always comes, with its buttons', () => {
     const c = cardFrom(msg({ markup: inline }), [], me)!
-    expect(c).toMatchObject({ key: '10:7', from: '@ci_bot', isBot: true, text: 'Deploy v2?' })
+    expect(c).toMatchObject({ key: '10:7', from: 'CI', isBot: true, text: 'Deploy v2?' })
     expect(c.actions.map(a => [a.label, a.style])).toEqual([['OK Deploy', 'danger']])
     expect(c.replyTo).toBeUndefined()
   })
@@ -36,7 +36,7 @@ describe('which messages become cards', () => {
   it('groups only when picked; answers go back as a reply', () => {
     expect(cardFrom(msg({ chat: team, sender: bot, markup: inline }), [], me)).toBeNull()
     const fromBot = cardFrom(msg({ chat: team, sender: bot, markup: inline }), [-100500], me)!
-    expect(fromBot).toMatchObject({ key: '-100500:7', chatId: -100500, from: '@ci_bot · Dev team', isBot: true, replyTo: 7 })
+    expect(fromBot).toMatchObject({ key: '-100500:7', chatId: -100500, from: 'CI · Dev team', isBot: true, replyTo: 7 })
     const fromAlex = cardFrom(msg({ chat: team, sender: alex, text: 'Who reviews #412?' }), [-100500], me)!
     expect(fromAlex).toMatchObject({ from: 'Alex · Dev team', isBot: false, replyTo: 7 })
     expect(fromAlex.actions.map(a => a.label)).toEqual(['Yes', 'Later'])
@@ -104,7 +104,7 @@ describe('names on the lens', () => {
     expect(nameOf({ type: 'user', id: 42, displayName: '12345', username: 'alex' })).toBe('@alex')
     expect(nameOf({ type: 'user', id: 42, displayName: '', firstName: 'Alex', lastName: 'Dupont' })).toBe('Alex Dupont')
     expect(nameOf({ type: 'user', id: 10, isBot: true, displayName: '12345', username: 'ci_bot' })).toBe('@ci_bot')
-    expect(nameOf({ type: 'user', id: 10, isBot: true, displayName: 'CI' })).toBe('@CI')
+    expect(nameOf({ type: 'user', id: 10, isBot: true, displayName: 'CI' })).toBe('CI') // a bot's name, as Telegram shows it
   })
 
   it('keeps group headers readable on cards when peers are incomplete', () => {
@@ -189,5 +189,25 @@ describe('Telegram sponsored messages (API terms 3.3)', () => {
     expect(c).toMatchObject({ key: 'ad:-100:0102ff', from: 'Durov News · Sponsored', readOnly: true, text: 'Durov\nAds on Telegram' })
     expect(c.actions.map(a => a.kind)).toEqual(['phone', 'dismiss'])
     expect(c.ad).toBe(ad.random)
+  })
+})
+
+describe('live mtcute messages', () => {
+  // mtcute exposes message and peer fields as prototype getters: a spread copies none of them.
+  const live = <T extends object>(o: T): T => {
+    const proto = {}
+    for (const [k, v] of Object.entries(o)) Object.defineProperty(proto, k, { get: () => v })
+    return Object.create(proto)
+  }
+  const m = live({ ...msg({ markup: inline }), chat: live(bot), sender: live(bot) })
+
+  it('are copied field by field, so cards and bubbles still see them', () => {
+    expect({ ...m }.text).toBeUndefined() // what silently stopped every live card
+    expect(cardFrom(msgLike(m, () => undefined), [], me)).toMatchObject({ key: '10:7', from: 'CI', text: 'Deploy v2?' })
+    expect(bubbleFrom(msgLike(m, () => undefined)).date).toBe(1_700_000_000_000)
+  })
+
+  it("take a partial peer's name from the dialogs already seen", () => {
+    expect(cardFrom(msgLike(m, id => (id === 10 ? 'CI deploys' : undefined)), [], me)!.from).toBe('CI deploys')
   })
 })
