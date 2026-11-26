@@ -97,6 +97,15 @@ export function fromReply(rows: RawButton[][]): Action[] {
   })
 }
 
+/**
+ * Labels that commit something hard to undo, in English and French. Bots rarely mark such buttons as
+ * danger (BotFather's Delete Bot and Transfer Ownership carry no style), so Ack reads the label too.
+ */
+const IRREVERSIBLE = /\b(delete|remove|erase|wipe|destroy|purge|revoke|reset|terminate|transfer|withdraw|pay|buy|sell|purchase|checkout|swap|stake|unstake|bet|liquidate|close (all|position)|deploy|roll ?back|ban|kick|block|leave|log ?out|sign out|supprimer|effacer|révoquer|réinitialiser|transférer|retirer|payer|acheter|vendre|bannir|exclure|bloquer|quitter|déconnecter)\b/i
+
+/** A press that asks for an explicit yes first: marked danger by the bot, or irreversible by its label. */
+export const needsYes = (a: Action) => a.style === 'danger' || ((a.kind === 'callback' || a.kind === 'text') && IRREVERSIBLE.test(a.label))
+
 /** The bot's order is kept, except danger buttons always go last. */
 export function order(actions: Action[]): Action[] {
   return [...actions.filter(a => a.style !== 'danger'), ...actions.filter(a => a.style === 'danger')]
@@ -107,7 +116,7 @@ const LIST_INNER_PX = 576 - 24 // list items have 12 px padding each side
 
 /** One list row. Lists take 63 UTF-8 bytes per item at most. */
 export function rowLabel(a: Action): string {
-  const prefix = a.kind === 'phone' || a.kind === 'copy' || a.kind === 'disabled' ? PREFIX[a.kind] : PREFIX[a.style ?? ''] ?? ''
+  const prefix = a.kind === 'phone' || a.kind === 'copy' || a.kind === 'disabled' ? PREFIX[a.kind] : needsYes(a) ? PREFIX.danger : PREFIX[a.style ?? ''] ?? ''
   return fitBytes(pxTruncate(prefix + a.label, LIST_INNER_PX), 63)
 }
 

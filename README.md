@@ -16,16 +16,17 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 
 ## What Ack does
 
-- **Every bot, nothing to set up.** Ack signs in as you (your own Telegram account, from your phone) and turns any bot message with buttons into a card on the lens. BotFather, your agent, your deploy bot, your price alerts: all of them work as they are.
+- **Every bot, nothing to set up.** Ack signs in as you (your own Telegram account, from your phone) and turns every bot message into a card on the lens, alerts included, and its buttons into one-tap actions. BotFather, your agent, your deploy bot, your price alerts: all of them work as they are.
 - **One tap.** Swipe to pick, tap to press. The bot's answer appears in the card header, and when the bot edits its message, the card follows. When the bot answers with a new message instead, that message replaces the card, so a button is never pressed twice.
 - **Safe by design.**
   - Every press runs on a 1.5 s countdown you can undo with a double tap.
   - Buttons a bot marks `danger` always ask for an explicit yes and show what the card is about.
+  - So do buttons whose label cannot be undone (delete, revoke, transfer, withdraw, pay, log out, in English and French), even when the bot marks nothing. Real bots rarely do: on a live account, BotFather's Delete Bot and Transfer Ownership carry no style at all.
   - Danger buttons are always listed last.
 - **Numbers stay exact.** Emoji the glasses can't draw become words (✅ becomes "OK") or disappear. Digits, prices, addresses and commands are never changed, and a test checks it.
 - **Buttons the lens can't run say so.** Links, Mini Apps and payments show "Finish on your phone" with the address. Copy buttons show their code, and disabled buttons are greyed.
 - **People too, without becoming a chat client.** Only the people you pick come to the glasses, in the same queue. You answer with your quick replies or by voice.
-- **Bot command menus from the lens.** Tap the empty lens to see your bots, pick one, then pick a command from its "/" menu: `/mybots`, `/deploy`, `/status`...
+- **Any bot from the lens.** Tap the empty lens to see your bots and pick one: its last messages come first, buttons or not (alerts, agent reports), then its "/" menu: `/mybots`, `/deploy`, `/status`...
 - **Voice when it is faster.** Hold, speak, release: "deny it" presses Deny. Anything else is sent as a message once you confirm. Transcription uses your own Groq or OpenAI key, kept on your phone.
 - **A phone app in Even's own design language.** It follows Even's published app guidelines (colours, type scale, spacing, official pixel icons) and has three tabs:
   - **Lens**: the lens drawn to scale, which you can drive from the phone with tap, double tap and swipes when the glasses are not at hand, plus the log of every decision and the message-to-lens latency measured on every card.
@@ -94,7 +95,7 @@ Building from source: like the public repositories of iMe and Nicegram, this one
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 91 unit tests, production build, no API key in the repository
+npm run verify   # types, 99 unit tests, production build, no API key in the repository
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -121,6 +122,8 @@ Ack end-to-end on the Even Hub simulator
 ```
 
 The unit tests check every page Ack can draw against the SDK's own validator (`validateEvenHubPageContainer`), and they also check the 63-byte list rows and the 1,000-character text limit.
+
+Live proof on a real Telegram account, in [docs/proof/bots.md](docs/proof/bots.md) (`node scripts/bot-probe.mjs`): 21 public bots Ack was never told about answered `/start`, all 21 answers reached the lens as cards, and 31 of 31 of their buttons became lens actions. No bot button was pressed.
 
 ## How it works
 
@@ -151,7 +154,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:84-87` |
 | Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:70-74` |
 | Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:92` |
-| Callback toasts and alerts | `src/app.ts:237` |
+| Callback toasts and alerts | `src/app.ts:241` |
 | Rich messages | `src/cards-from.ts:155` |
 
 ### Even Hub SDK features used
@@ -163,7 +166,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Native list selection, swipe handled by firmware | `src/glasses.ts:36` |
 | Long press and release for voice (SDK 0.0.14+) | `src/glasses.ts:54` |
 | Ring vs temple source on taps | `src/glasses.ts:28` |
-| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:184` |
+| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:188` |
 | Text brightness levels (`textColor`) for hierarchy | `src/app.ts` |
 | Glasses microphone (`audioControl`) | `src/glasses.ts:145` |
 | Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:146` |
@@ -183,7 +186,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 - Ack only sees what your account already sees. People's messages reach the glasses only for the chats you pick.
 - The Gram wallet is read only: Ack reads the balance and the transfers, and never signs or sends anything. A TON Connect request is only shown; approving it stays in Telegram.
 - Ack follows Telegram's API terms: a message read on the lens is marked read in Telegram, as in any client (no ghost mode), and official sponsored messages appear, labelled, below a channel's posts and above bot chats on the phone, and after a channel post on the lens. Links outside Telegram ask before opening.
-- Each press can be undone for 1.5 s, and bots you trust can skip the countdown in settings. Buttons a bot marks dangerous always ask for confirmation.
+- Each press can be undone for 1.5 s, and bots you trust can skip the countdown in settings. Buttons a bot marks dangerous, or whose label cannot be undone, always ask for confirmation, on the lens and on the phone.
 - Voice audio is captured only while you hold. It goes straight from your phone to the transcription service you chose, with your own key.
 - The repository holds no secrets. Ack's Telegram api_id comes from `.env.local`, which git ignores, and is injected into the build, as iMe and Nicegram do. `npm run verify` and `npm run pack` fail if it ever lands in a file git would commit.
 
@@ -200,6 +203,7 @@ src/voice.ts      glasses mic to WAV to transcription
 src/phone.ts      the phone app: sign in (QR or phone), Lens, Chats, chat view, Settings
 src/icons/        official Even app icons used by the phone app
 scripts/e2e.mjs   end-to-end checks on the simulator
+scripts/bot-probe.mjs  live proof with real public bots (docs/proof/bots.md)
 tools/demo-bot.mjs  a real Telegram bot with styled buttons
 ```
 

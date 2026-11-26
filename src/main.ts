@@ -73,6 +73,7 @@ const app = new App({
   onSeen: c => { if (src?.kind === 'telegram') void (c.ad ? src.adViewed(c.ad) : src.markRead(c)) },
 }, saved)
 for (const k of load<string[]>('ack.dismissed', [])) app.dismissed.add(k)
+if (import.meta.env.DEV) Object.assign(window, { ack: { app, get src() { return src } } }) // dev server only: live test scripts (scripts/bot-probe.mjs)
 
 bridge.onEvenHubEvent(e => {
   const i = parseEvent(e)

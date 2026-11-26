@@ -183,7 +183,7 @@ describe('a card', () => {
     const alerting: Source = { ...source, press: async () => ({ toast: 'Insufficient funds', alert: true }) }
     app.setSource(alerting)
     app.settings.instant = [1]
-    app.upsert(card(1, [act('Pay')]))
+    app.upsert(card(1, [act('Check balance')]))
     app.input({ type: 'select', index: 0 })
     await flush()
     expect(main()).toBe('Insufficient funds')
@@ -304,6 +304,8 @@ describe('bots and commands from the lens', () => {
     expect(last().list!.items).toEqual(['@BotFather'])
     app.input({ type: 'select', index: 0 })
     await flush()
+    expect(last().list!.items).toEqual(['Commands (1)']) // no messages yet: only the command menu
+    app.input({ type: 'select', index: 0 })
     expect(last().list!.items[0]).toBe('/mybots · Edit your bots')
     app.input({ type: 'select', index: 0 })
     await flush()
@@ -395,5 +397,46 @@ describe('what the lens really showed', () => {
     app.upsert({ ...card(3, [{ label: 'Open', kind: 'phone', value: 'https://t.me/x' }], 'Durov\nAds on Telegram'), ad: random, readOnly: true })
     await flush()
     expect(seen[seen.length - 1].ad).toBe(random)
+  })
+})
+
+describe('irreversible buttons the bot did not mark', () => {
+  it('ask for an explicit yes and say why, then press on tap', async () => {
+    app.upsert(card(1, [act('Edit Bot'), act('Delete Bot'), act('« Back to Bot List')]))
+    expect(last().list!.items[1]).toBe('▲ Delete Bot')
+    app.input({ type: 'select', index: 1 })
+    expect(lens()).toContain('cannot be undone')
+    expect(pressed).toEqual([])
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(pressed).toEqual(['Delete Bot'])
+  })
+})
+
+describe('a bot opened from the lens', () => {
+  const bubble = (c: Card, out = false) => ({ id: c.msgId, out, from: '', text: c.text, date: c.date, buttons: [], card: c })
+  const agent = (id: number, text: string, actions: Action[] = []) => ({ ...card(id, actions, text), key: `7:${id}`, chatId: 7, from: 'Evidence Mining' })
+
+  it('shows its last messages, buttons or not, newest first, and opens one as a card', async () => {
+    const msgs = [bubble(agent(4, '/start'), true), bubble(agent(5, 'Agent run finished\n6 markets studied')), bubble(agent(6, 'Run failed', [act('Retry')]))]
+    app.setSource({ ...source, history: async () => msgs, commands: async () => [] })
+    app.input({ type: 'click', ring: false })
+    await flush()
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    expect(last().texts[0].text).toBe('@BotFather')
+    expect(last().list!.items.map(l => l.replace(/^\S+ · /, ''))).toEqual(['Run failed', 'Agent run finished'])
+    app.input({ type: 'select', index: 1 })
+    expect(main()).toContain('Agent run finished')
+    expect(last().list!.items).toEqual(['OK'])
+  })
+
+  it('says so when the bot never wrote and has no menu', async () => {
+    app.setSource({ ...source, history: async () => [], commands: async () => [] })
+    app.input({ type: 'click', ring: false })
+    await flush()
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    expect(lens()).toContain('No messages from this bot yet.')
   })
 })

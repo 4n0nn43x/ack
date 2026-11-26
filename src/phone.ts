@@ -2,7 +2,7 @@
 // drive and watch the lens, browse Telegram chats and press bot buttons, settings.
 import { renderSVG } from 'uqr'
 import type { LogEntry } from './app'
-import type { Action } from './cards'
+import { needsYes, type Action } from './cards'
 import { adNeedsConfirm, type Bubble, type ChatKind, type ChatRow, type Sponsored } from './cards-from'
 import type { Input, Page } from './glasses'
 import { PROVIDERS, type Provider } from './voice'
@@ -330,6 +330,9 @@ export class Phone {
     const l = page.list
     const list = l ? `<div class="box" style="${box(l.x, l.y, l.w, l.h)}">${l.items.map((i, n) => `<button class="lrow${n === this.sel ? ' sel' : ''}" data-row="${n}">${esc(i)}</button>`).join('')}</div>` : ''
     el.innerHTML = texts + list
+    // Like the glasses' firmware, the list scrolls so the selected row stays in view.
+    const sel = el.querySelector<HTMLElement>('.lrow.sel')
+    if (sel?.parentElement) sel.parentElement.scrollTop = Math.max(0, sel.offsetTop + sel.offsetHeight - sel.parentElement.clientHeight)
     for (const r of el.querySelectorAll<HTMLButtonElement>('[data-row]')) r.onclick = () => { this.sel = Number(r.dataset.row); this.h.input({ type: 'select', index: this.sel }) }
     el.onclick = e => { if (!(e.target as HTMLElement).closest('[data-row]') && !page.list) this.h.input({ type: 'click', ring: false }) }
   }
@@ -483,7 +486,7 @@ export class Phone {
     this.root.querySelector('.ad')?.remove()
     const bot = c.kind === 'bot'
     const box = document.createElement('div')
-    box.className = bot ? 'card ad bar' : 'msg in ad'
+    box.className = bot ? 'card ad adbar' : 'msg in ad'
     box.innerHTML = `
       <div class="from">${bot ? `<span class="tag">${ad.label === 'Recommended' ? 'Recommended' : 'Ad'}</span> ` : ''}${esc(ad.title)}</div>
       <div class="text">${esc(ad.text)}</div>
@@ -545,9 +548,9 @@ export class Phone {
       await navigator.clipboard?.writeText(action.value ?? '').catch(() => {})
       return this.toast(`Copied: ${action.value ?? ''}`)
     }
-    // A button the bot marks dangerous takes a second tap, like the explicit yes on the lens.
+    // A dangerous or irreversible button takes a second tap, like the explicit yes on the lens.
     const key = `${b.id}:${i}`
-    if (action.style === 'danger' && this.armed !== key) {
+    if (needsYes(action) && this.armed !== key) {
       this.armed = key
       el.textContent = 'Tap again to confirm'
       el.classList.add('armed')

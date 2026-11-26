@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { measureTextWrap } from '@evenrealities/pretext'
-import { ago, clean, fit, fitBytes, fromInline, fromReply, match, missingGlyphRatio, order, rowLabel, type Action, type RawButton } from '../src/cards'
+import { ago, clean, fit, fitBytes, fromInline, fromReply, match, missingGlyphRatio, needsYes, order, rowLabel, type Action, type RawButton } from '../src/cards'
 
 const cb = (text: string, style?: RawButton['style']): RawButton => ({ _: 'keyboardInlineButton', text, style, type: { _: 'inlineButtonTypeCallback', data: new TextEncoder().encode(text) } })
 
@@ -128,5 +128,24 @@ describe('voice match', () => {
   it('returns nothing when unsure', () => {
     expect(match('what is the weather', acts)).toBeUndefined()
     expect(match('', acts)).toBeUndefined()
+  })
+})
+
+describe('presses that need an explicit yes', () => {
+  const cb = (label: string, style?: 'danger'): Action => ({ label, kind: 'callback', style })
+
+  it('irreversible labels, even when the bot marks nothing (BotFather does not)', () => {
+    for (const l of ['Delete Bot', 'Transfer Ownership', 'Revoke current token', 'Withdraw 50 USDT', 'Supprimer le bot', 'Log out', 'Close all', 'Roll back'])
+      expect(needsYes(cb(l)), l).toBe(true)
+  })
+
+  it('not everyday answers, so one tap stays one tap', () => {
+    for (const l of ['« Back to Bot List', 'Allow once', 'Payments', 'API Token', 'Book $212', 'Mute 1 h', 'Approve', 'Staging only'])
+      expect(needsYes(cb(l)), l).toBe(false)
+  })
+
+  it('whatever the label when the bot marks it danger, never for links the phone opens', () => {
+    expect(needsYes(cb('Deny', 'danger'))).toBe(true)
+    expect(needsYes({ label: 'Delete on the website', kind: 'phone' })).toBe(false)
   })
 })

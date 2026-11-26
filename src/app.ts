@@ -1,7 +1,8 @@
 // Ack's brain: a queue of cards, one view on the lens, and what each gesture does.
 // No SDK or Telegram imports here: everything comes in through Deps and Source, so it runs in tests.
-import { ago, clean, fit, match, missingGlyphRatio, order, replies, rowLabel, type Action, type Card } from './cards'
+import { ago, clean, fit, match, missingGlyphRatio, needsYes, order, replies, rowLabel, type Action, type Card } from './cards'
 import { shortAddress, type WalletView } from './wallet'
+import type { Bubble } from './cards-from'
 import type { Input, Page } from './glasses'
 
 export interface PressResult { toast?: string; alert?: boolean; url?: string }
@@ -16,6 +17,7 @@ export interface Source {
   bots(): Promise<BotRef[]>
   commands(botId: number): Promise<Command[]>
   wallet?(): Promise<WalletView | null> // the Gram wallet, read only
+  history?(chatId: number): Promise<Bubble[]> // a chat's last messages, oldest first
 }
 
 export interface Settings {
@@ -52,6 +54,7 @@ type View =
   | { v: 'note'; text: string; head?: string }
   | { v: 'bots'; bots: BotRef[] }
   | { v: 'cmds'; bot: BotRef; cmds: Command[] }
+  | { v: 'bot'; bot: BotRef; cards: Card[]; cmds: Command[] }
   | { v: 'wallet' }
   | { v: 'voice' }
   | { v: 'heard'; text: string; a?: Action }
@@ -161,9 +164,10 @@ export class App {
         if (i.type === 'double') { this.cancel(); this.log(v.a, 'undone'); return this.note(`Undone: ${v.a.label}`) }
         return
       case 'bots':
+      case 'bot':
       case 'cmds':
         if (i.type === 'select') return this.items[i.index]?.run()
-        if (i.type === 'double') return v.v === 'cmds' ? void this.openBots() : this.go({ v: 'root' })
+        if (i.type === 'double') return v.v === 'bots' ? this.go({ v: 'root' }) : void this.openBots()
         return
       case 'wallet':
         if (i.type === 'click' || i.type === 'double') return void this.openBots()
@@ -210,7 +214,7 @@ export class App {
       case 'copy': this.log(a, 'shown'); return this.note(a.value || a.label)
       case 'disabled': return this.note('This button is off.')
     }
-    if (a.style === 'danger') return this.go({ v: 'confirm', a })
+    if (needsYes(a)) return this.go({ v: 'confirm', a })
     if (this.settings.instant.includes(c.chatId)) return this.fire(a, c.key)
     this.countdown(a, c.key, UNDO_MS)
   }
@@ -289,10 +293,23 @@ export class App {
     this.go({ v: 'bots', bots })
   }
 
-  private async openCommands(bot: BotRef) {
-    const cmds = (await this.source?.commands(bot.id)) ?? []
-    if (!cmds.length) return this.note('This bot has no command menu.', bot.name)
-    this.go({ v: 'cmds', bot, cmds })
+  /** A bot from the lens: its last messages, newest first, buttons or not, then its command menu if it has one. */
+  private async openBot(bot: BotRef) {
+    const [msgs, cmds] = await Promise.all([
+      (this.source?.history?.(bot.id) ?? Promise.resolve([])).catch(() => [] as Bubble[]),
+      (this.source?.commands(bot.id) ?? Promise.resolve([])).catch(() => [] as Command[]),
+    ])
+    const cards = msgs.filter(b => !b.out).map(b => b.card).reverse().slice(0, 10)
+    if (!cards.length && !cmds.length) return this.note('No messages from this bot yet.', bot.name)
+    this.go({ v: 'bot', bot, cards, cmds })
+  }
+
+  /** Opens a past message as a card: its buttons work as on any card. */
+  private show(c: Card) {
+    this.dismissed.delete(c.key)
+    this.shown.add(c.key) // not a new message: no latency to measure
+    this.queue = [c, ...this.queue.filter(x => x.key !== c.key)]
+    this.go({ v: 'card' })
   }
 
   private async sendCommand(bot: BotRef, cmd: string) {
@@ -396,7 +413,7 @@ export class App {
       case 'read':
         return screen(from, c?.text ?? '', 'Swipe: scroll   ·   Tap: back')
       case 'confirm':
-        return screen(`${from} · marked as dangerous`, `▲ ${v.a.label}?\n\n${c ? fit(c.text, W - 16, 4).text : ''}`, 'Tap: yes, do it   ·   Double tap: no')
+        return screen(`${from} · ${v.a.style === 'danger' ? 'marked as dangerous' : 'cannot be undone'}`, `▲ ${v.a.label}?\n\n${c ? fit(c.text, W - 16, 4).text : ''}`, 'Tap: yes, do it   ·   Double tap: no')
       case 'pending':
         return screen(from, `▶ ${v.a.label}\n\nSending in ${(v.left / 1000).toFixed(1)} s\n${bar(v.left / UNDO_MS)}`, 'Double tap: undo   ·   Tap: send now')
       case 'wait':
@@ -411,12 +428,18 @@ export class App {
         const w = this.wallet
         this.items = [
           ...(w ? [{ label: `Gram wallet · ${w.balance} GRAM`, run: () => this.go({ v: 'wallet' }) }] : []),
-          ...v.bots.slice(0, w ? 18 : 19).map(b => ({ label: b.name, run: () => void this.openCommands(b) })),
+          ...v.bots.slice(0, w ? 18 : 19).map(b => ({ label: b.name, run: () => void this.openBot(b) })),
         ]
         return listPage('Your bots', this.items)
       }
       case 'wallet':
         return this.walletPage()
+      case 'bot':
+        this.items = [
+          ...v.cards.map(c => ({ label: `${ago(this.d.now() - c.date)} · ${c.text.split('\n').find(l => l.trim()) ?? '(no text)'}`, run: () => this.show(c) })),
+          ...(v.cmds.length ? [{ label: `Commands (${v.cmds.length})`, run: () => this.go({ v: 'cmds', bot: v.bot, cmds: v.cmds }) }] : []),
+        ]
+        return listPage(v.bot.name, this.items)
       case 'cmds':
         this.items = v.cmds.slice(0, 19).map(cm => ({ label: cm.description ? `/${cm.command} · ${cm.description}` : `/${cm.command}`, run: () => void this.sendCommand(v.bot, cm.command) }))
         return listPage(`${v.bot.name} · commands`, this.items)
@@ -487,7 +510,7 @@ function listPage(title: string, items: Item[]): Page {
       { name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: title, color: 2 },
       { name: 'foot', x: 8, y: H - FOOT_H, w: W - 16, h: FOOT_H, text: 'Tap: open   ·   Double tap: back', color: 2 },
     ],
-    list: { name: 'items', x: 0, y: HEAD_H, w: W, h: rows * ROW_H, items: items.map(i => rowLabel({ label: i.label, kind: 'callback' })) },
+    list: { name: 'items', x: 0, y: HEAD_H, w: W, h: rows * ROW_H, items: items.map(i => rowLabel({ label: i.label, kind: 'dismiss' })) }, // no ▲: list rows open, they press nothing
   }
 }
 
