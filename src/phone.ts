@@ -292,7 +292,7 @@ export class Phone {
     if (!page) { el.innerHTML = ''; return }
     const pct = (v: number, of: number) => `${((v / of) * 100).toFixed(3)}%`
     const box = (x: number, y: number, w: number, h: number) => `left:${pct(x, 576)};top:${pct(y, 288)};width:${pct(w, 576)};height:${pct(h, 288)}`
-    const texts = page.texts.map(t => `<div class="box b${t.color ?? 4}" style="${box(t.x, t.y, t.w, t.h)}">${esc(t.text)}</div>`).join('')
+    const texts = page.texts.map(t => `<div class="box b${t.color ?? 4}"${t.capture ? ' data-capture' : ''} style="${box(t.x, t.y, t.w, t.h)}">${esc(t.text)}</div>`).join('')
     const l = page.list
     const list = l ? `<div class="box" style="${box(l.x, l.y, l.w, l.h)}">${l.items.map((i, n) => `<button class="lrow${n === this.sel ? ' sel' : ''}" data-row="${n}">${esc(i)}</button>`).join('')}</div>` : ''
     el.innerHTML = texts + list
@@ -307,7 +307,7 @@ export class Phone {
     const items = this.page?.list?.items.length ?? 0
     if (what === 'up' || what === 'down') {
       if (items) { this.sel = Math.max(0, Math.min(items - 1, this.sel + (what === 'up' ? -1 : 1))); this.mirror(this.page!) }
-      else this.h.input({ type: what })
+      else if (!this.scrollMirror(what)) this.h.input({ type: what })
       return
     }
     if (what === 'tap') return this.h.input(items ? { type: 'select', index: this.sel } : { type: 'click', ring: false })
@@ -318,6 +318,16 @@ export class Phone {
     menu.hidden = !menu.hidden
     menu.innerHTML = entries.map(m => `<button data-menu="${m.id}">${esc(m.label)}</button>`).join('')
     for (const b of menu.querySelectorAll<HTMLButtonElement>('[data-menu]')) b.onclick = () => { menu.hidden = true; this.h.input({ type: 'menu', id: Number(b.dataset.menu) }) }
+  }
+
+  /** Like the glasses' firmware: a long text scrolls in place, and only a swipe at its end reaches the app. */
+  private scrollMirror(what: 'up' | 'down'): boolean {
+    const box = this.root.querySelector<HTMLElement>('#mirror [data-capture]')
+    if (!box) return false
+    const line = parseFloat(getComputedStyle(box).lineHeight) || 20
+    const before = box.scrollTop
+    box.scrollTop += (what === 'up' ? -1 : 1) * Math.max(line, box.clientHeight - line) // a page, one line kept for context
+    return box.scrollTop !== before
   }
 
   private logHtml(): string {
