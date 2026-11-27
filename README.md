@@ -73,7 +73,7 @@ On Linux the simulator needs WebKitGTK: `sudo apt install libwebkit2gtk-4.1-0`.
 
 ## Use it with your Telegram account
 
-1. Install `ack.ehpk` on the glasses (see below) and open Ack in the Even app.
+1. Download `ack.ehpk` from the [latest release](https://github.com/4n0nn43x/ack/releases/latest) (or build it, see below), install it on the glasses through the Even Hub developer portal, and open Ack in the Even app.
 2. Scan the QR code on the Ack page with Telegram on another device (Settings, Devices, Link Desktop Device), or enter your phone number and the code Telegram sends you. Nothing else to set up. The session is stored on your phone only.
 3. To see bot buttons right away, run the real demo bot. It uses Bot API 9.4 button styles:
 
