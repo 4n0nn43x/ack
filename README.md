@@ -30,7 +30,7 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 - **Numbers stay exact.** Emoji the glasses can't draw become words (✅ becomes "OK") or disappear. Digits, prices, addresses and commands are never changed, and a test checks it.
 - **Buttons the lens can't run say so.** Links, Mini Apps and payments show "Finish on your phone" with the address. Copy buttons show their code, and disabled buttons are greyed.
 - **People too, without becoming a chat client.** Only the people you pick come to the glasses, in the same queue. You answer with your quick replies or by voice.
-- **Any chat from the lens.** Tap the empty lens to see your chats: the people, groups and channels you picked come first, then every bot. Pick one: its last messages come first, buttons or not (alerts, agent reports), with your quick replies for a person, then a bot's "/" menu: `/mybots`, `/deploy`, `/status`...
+- **Any chat from the lens, in a sidebar.** Tap the empty lens: your bots and the people, groups and channels you picked sit in sections on the left, and swiping moves through them while the chats of the chosen section show on the right. Tap opens a section, then a chat: its last messages come first, buttons or not (alerts, agent reports), with your quick replies for a person, then a bot's "/" menu: `/mybots`, `/deploy`, `/status`... The sidebar is also in the glasses menu of every card.
 - **Voice when it is faster.** Hold, speak, release: "deny it" presses Deny. Anything else is sent as a message once you confirm. Transcription uses your own Groq or OpenAI key, kept on your phone.
 - **A phone app in Even's own design language.** It follows Even's published app guidelines (colours, type scale, spacing, official pixel icons) and has three tabs:
   - **Lens**: the lens drawn to scale, which you can drive from the phone with tap, double tap and swipes when the glasses are not at hand, plus the log of every decision and the message-to-lens latency measured on every card.
@@ -42,9 +42,9 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 | --- | --- | --- | --- | --- |
 | ![Sign in](docs/phone/1-sign-in.png) | ![Lens tab](docs/phone/2-lens.png) | ![Chats tab](docs/phone/3-chats.png) | ![A bot chat](docs/phone/4-chat.png) | ![Settings](docs/phone/5-settings.png) |
 
-| Undo countdown | The bot answered | Danger needs a yes |
-| --- | --- | --- |
-| ![Undo countdown](docs/lens/3-undo-countdown.png) | ![Bot edited its message](docs/lens/4-bot-edited.png) | ![Danger confirmation](docs/lens/6-danger-confirm.png) |
+| Undo countdown | The bot answered | Danger needs a yes | Your chats |
+| --- | --- | --- | --- |
+| ![Undo countdown](docs/lens/3-undo-countdown.png) | ![Bot edited its message](docs/lens/4-bot-edited.png) | ![Danger confirmation](docs/lens/6-danger-confirm.png) | ![The lens sidebar](docs/lens/8-sidebar.png) |
 
 ## Try it in 2 minutes, no account needed
 
@@ -92,7 +92,7 @@ Building from source: like the public repositories of iMe and Nicegram, this one
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 90 unit tests, production build, no API key in the repository
+npm run verify   # types, 93 unit tests, production build, no API key in the repository
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -149,7 +149,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:83-86` |
 | Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:69-73` |
 | Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:91` |
-| Callback toasts and alerts | `src/app.ts:229` |
+| Callback toasts and alerts | `src/app.ts:242` |
 | Rich messages | `src/cards-from.ts:167` |
 
 ### Even Hub SDK features used
@@ -159,9 +159,10 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Text and list containers, one page system with header, body and gesture hints | `src/app.ts`, `src/glasses.ts:65` |
 | In-place text updates (`textContainerUpgrade`) when only texts change, else rebuild | `src/glasses.ts:137` |
 | Native list selection, swipe handled by firmware | `src/glasses.ts:36` |
+| Swipes read from a text container with event capture (`SCROLL_TOP` / `SCROLL_BOTTOM`) and brightness changed in place: the lens sidebar | `src/glasses.ts:42-43`, `src/app.ts:517` |
 | Long press and release for voice (SDK 0.0.14+) | `src/glasses.ts:54` |
 | Ring vs temple source on taps | `src/glasses.ts:28` |
-| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:176` |
+| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:188` |
 | Text brightness levels (`textColor`) for hierarchy | `src/app.ts` |
 | Glasses microphone (`audioControl`) | `src/glasses.ts:145` |
 | Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:146` |

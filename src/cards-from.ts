@@ -191,9 +191,9 @@ export function preview(m: Pick<MsgLike, 'text' | 'media' | 'richMessage'> & Par
 /** A message for the phone's chat view, with its buttons ready to press. */
 /**
  * Ack+: a monthly Telegram Stars subscription to Ack's private channel, through this invite link.
- * Ack stays free and unlimited without it. Empty until the channel exists: the phone then hides the offer.
+ * Ack stays free and unlimited without it. With an empty link the phone hides the offer.
  */
-export const ACK_PLUS = { link: '', stars: 250 }
+export const ACK_PLUS = { link: 'https://t.me/+hv6RrhI1jO80MThk', stars: 250 }
 
 /** The hash of a t.me/+hash or t.me/joinchat/hash invite link. */
 export function inviteHash(link: string): string {

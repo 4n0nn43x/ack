@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { App, EDIT_WAIT_MS, UNDO_MS, type Deps, type LogEntry, type Source } from '../src/app'
+import { App, EDIT_WAIT_MS, SECTIONS_FOOT, UNDO_MS, type Deps, type LogEntry, type Source } from '../src/app'
+import { fit } from '../src/cards'
 import type { Action, Card } from '../src/cards'
 import type { Page } from '../src/glasses'
 
@@ -78,7 +79,7 @@ describe('a card', () => {
     expect(app.view.v).toBe('card')
     expect(last().texts[0].text).toContain('@deploybot')
     expect(last().list!.items).toEqual(['Staging only', 'Cancel', '▲ Deploy'])
-    expect(last().menu?.length).toBe(3)
+    expect(last().menu?.length).toBe(4)
   })
 
   it('presses after the undo window', async () => {
@@ -313,19 +314,52 @@ describe('bots and commands from the lens', () => {
   })
 })
 
-describe('chats picked for the glasses', () => {
-  it('come first in the lens list, and a person opens with the quick replies', async () => {
-    const alex: Card = { key: '201:5', chatId: 201, msgId: 5, from: 'Alex', isBot: false, text: 'Still on for 7pm?', date: t, actions: [], receivedAt: 0 }
-    app.setSource({
-      ...source,
-      followed: async () => [{ id: 201, name: 'Alex' }, { id: 7, name: '@BotFather' }],
-      history: async id => (id === 201 ? [{ id: 5, out: false, from: '', text: alex.text, date: t, buttons: [], card: alex }] : []),
-      commands: async id => (id === 201 ? [] : [{ command: 'mybots', description: 'Edit your bots' }]),
-    })
+describe('the lens sidebar: bots, people, groups, channels', () => {
+  const alex: Card = { key: '201:5', chatId: 201, msgId: 5, from: 'Alex', isBot: false, text: 'Still on for 7pm?', date: t, actions: [], receivedAt: 0 }
+  const withPicks = () => app.setSource({
+    ...source,
+    followed: async () => [{ id: 201, name: 'Alex', kind: 'person' }, { id: 7, name: '@BotFather', kind: 'bot' }, { id: -5, name: 'Shop API team', kind: 'group' }],
+    history: async id => (id === 201 ? [{ id: 5, out: false, from: '', text: alex.text, date: t, buttons: [], card: alex }] : []),
+    commands: async () => { throw new Error('commands are only asked of bots') },
+  })
+  const side = () => last().texts.filter(x => x.name.startsWith('side'))
+  const right = () => last().texts.find(x => x.name === 'chats')!
+
+  it('tap opens the sections, swipes move through them and the right column follows', async () => {
+    withPicks()
     app.input({ type: 'click', ring: false })
     await flush()
     expect(last().texts[0].text).toBe('Your chats')
-    expect(last().list!.items).toEqual(['Alex', '@BotFather']) // a followed bot is listed once
+    expect(side().map(x => x.text)).toEqual(['▶ Bots · 1', 'People · 1', 'Groups · 1']) // no channel: no section
+    expect(side().map(x => x.color)).toEqual([4, 2, 2])
+    expect(right().text).toBe('@BotFather') // a followed bot is listed once
+    expect(right().capture).toBe(true)
+    app.input({ type: 'down' })
+    expect(side().map(x => x.text)).toEqual(['Bots · 1', '▶ People · 1', 'Groups · 1'])
+    expect(right().text).toBe('Alex')
+    app.input({ type: 'down' })
+    app.input({ type: 'down' }) // stops at the last section
+    expect(right().text).toBe('Shop API team')
+    app.input({ type: 'up' })
+    expect(right().text).toBe('Alex')
+  })
+
+  it('tap opens a section, a person opens with the quick replies, double taps walk back', async () => {
+    withPicks()
+    app.input({ type: 'click', ring: false })
+    await flush()
+    app.input({ type: 'down' })
+    app.input({ type: 'click', ring: false })
+    expect(last().texts[0].text).toBe('People')
+    expect(last().list!.items).toEqual(['Alex'])
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    expect(last().texts[0].text).toBe('Alex')
+    app.input({ type: 'double', ring: false })
+    expect(last().texts[0].text).toBe('People')
+    app.input({ type: 'double', ring: false })
+    expect(side().map(x => x.text)[1]).toBe('▶ People · 1') // back where it was
+    app.input({ type: 'click', ring: false })
     app.input({ type: 'select', index: 0 })
     await flush()
     app.input({ type: 'select', index: 0 })
@@ -334,6 +368,19 @@ describe('chats picked for the glasses', () => {
     app.input({ type: 'select', index: 0 })
     await tick(UNDO_MS)
     expect(pressed).toEqual(['Yes'])
+  })
+
+  it('the sidebar hint fits on one line of the lens', () => {
+    expect(fit(SECTIONS_FOOT, 576 - 16, 1).cut).toBe(false)
+  })
+
+  it('is one menu item away from any card', async () => {
+    withPicks()
+    app.upsert(card(1, [act('Deploy')]))
+    expect(last().menu!.map(m => m.label)).toContain('Your chats')
+    app.input({ type: 'menu', id: 4 })
+    await flush()
+    expect(last().texts[0].text).toBe('Your chats')
   })
 })
 
@@ -446,10 +493,10 @@ describe('a long bot list', () => {
     await flush()
     const first = last().list!.items
     expect(first).toHaveLength(19)
-    expect(first[18]).toBe('More chats (7)')
+    expect(first[18]).toBe('More (7)')
     app.input({ type: 'select', index: 18 })
     expect(last().list!.items).toEqual(many.slice(18).map(b => b.name))
-    expect(last().texts[0].text).toBe('Your chats · 19 to 25')
+    expect(last().texts[0].text).toBe('Bots · 19 to 25')
     app.input({ type: 'double', ring: false })
     expect(last().list!.items[0]).toBe('Bot 0')
     app.input({ type: 'double', ring: false })

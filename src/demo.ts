@@ -2,7 +2,7 @@
 // after a press and answer with a toast), so anyone can try Ack without an account.
 import type { BotRef, Command, PressResult, Source } from './app'
 import { clean, type Action, type Card, type Style } from './cards'
-import type { Bubble, ChatRow } from './cards-from'
+import type { Bubble, ChatKind, ChatRow } from './cards-from'
 
 type Btn = [label: string, next: string, style?: Style] | [label: string, url: { url: string }]
 interface Screen { text: string; buttons: Btn[][]; toast?: string }
@@ -68,6 +68,11 @@ const BOTS: Bot[] = [
 ]
 
 const ALEX = 201
+const TEAM = 202 // a group
+const NEWS = 203 // a channel
+const OTHERS: { id: number; name: string; kind: ChatKind }[] = [{ id: ALEX, name: 'Alex', kind: 'person' }, { id: TEAM, name: 'Shop API team', kind: 'group' }, { id: NEWS, name: 'Ack News', kind: 'channel' }]
+/** The demo starts with its person, group and channel on the glasses, so every lens section has something. */
+export const DEMO_PICKS = { people: [ALEX], groups: [TEAM, NEWS] }
 // The opening sequence: when each bot speaks first (ms after the demo starts).
 const SCRIPT: [botId: number, screen: string, at: number][] = [[101, 'ask', 900], [102, 'ask', 7000], [ALEX, '', 15000], [103, 'ask', 24000], [105, 'ask', 40000]]
 
@@ -82,6 +87,13 @@ export class DemoSource implements Source {
   constructor(private sink: (c: Card) => void, private replies: () => Action[], private follow: () => number[] = () => []) {}
 
   start() {
+    // What the group and the channel said before the demo began: the lens opens them from "Your chats".
+    const t = this.msg++
+    const n = this.msg++
+    const team: Card = { key: `${TEAM}:${t}`, chatId: TEAM, msgId: t, from: 'Sam · Shop API team', isBot: false, text: 'Deploy at 6pm? I will watch the dashboards.', date: Date.now() - 20 * 60_000, actions: [], receivedAt: 0, replyTo: t }
+    const news: Card = { key: `${NEWS}:${n}`, chatId: NEWS, msgId: n, from: 'Ack News', isBot: true, readOnly: true, text: 'Ack 0.1 is out: every Telegram bot, one tap away on Even G2.', date: Date.now() - 80 * 60_000, actions: [], receivedAt: 0 }
+    this.keep({ id: team.msgId, out: false, from: 'Sam', text: team.text, date: team.date, buttons: [], card: team })
+    this.keep({ id: news.msgId, out: false, from: '', text: news.text, date: news.date, buttons: [], card: news })
     for (const [id, screen, at] of SCRIPT) {
       this.timers.push(window.setTimeout(() => id === ALEX ? this.alex() : this.post(BOTS.find(b => b.id === id)!, screen), at))
     }
@@ -147,12 +159,12 @@ export class DemoSource implements Source {
     if (bot && screen) window.setTimeout(() => this.post(bot, screen), 500)
   }
 
-  async bots(): Promise<BotRef[]> { return BOTS.map(b => ({ id: b.id, name: b.name })) }
-  async followed(): Promise<BotRef[]> { return this.follow().includes(ALEX) ? [{ id: ALEX, name: 'Alex' }] : [] }
+  async bots(): Promise<BotRef[]> { return BOTS.map(b => ({ id: b.id, name: b.name, kind: 'bot' as const })) }
+  async followed(): Promise<BotRef[]> { return OTHERS.filter(c => this.follow().includes(c.id)) }
 
   async chats(): Promise<ChatRow[]> {
     const last = (id: number) => this.logs.get(id)?.at(-1)
-    const all: Pick<ChatRow, 'id' | 'name' | 'kind'>[] = [...BOTS.map(b => ({ id: b.id, name: b.name, kind: 'bot' as const })), { id: ALEX, name: 'Alex', kind: 'person' }]
+    const all: Pick<ChatRow, 'id' | 'name' | 'kind'>[] = [...BOTS.map(b => ({ id: b.id, name: b.name, kind: 'bot' as const })), ...OTHERS]
     return all
       .map(r => ({ ...r, preview: last(r.id)?.text.split('\n')[0] ?? '', date: last(r.id)?.date ?? 0, unread: 0 }))
       .sort((a, b) => b.date - a.date)

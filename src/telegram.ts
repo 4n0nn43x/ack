@@ -200,12 +200,12 @@ export class TelegramSource implements Source {
   }
 
   async bots(): Promise<BotRef[]> {
-    return this.list('bot').map(({ id, name }) => ({ id, name }))
+    return this.list('bot').map(({ id, name }) => ({ id, name, kind: 'bot' as const }))
   }
 
   /** The people, groups and channels the user picked for the glasses, for the lens chat list. */
   async followed(): Promise<BotRef[]> {
-    return this.follow().flatMap(id => { const c = this.recent.get(id); return c ? [{ id, name: c.name }] : [] })
+    return this.follow().flatMap(id => { const c = this.recent.get(id); return c ? [{ id, name: c.name, kind: c.kind }] : [] })
   }
 
   /**

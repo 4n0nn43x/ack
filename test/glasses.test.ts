@@ -44,6 +44,14 @@ describe('every page passes SDK validation', () => {
     app.input({ type: 'double', ring: false })
     app.input({ type: 'select', index: 0 })
     app.input({ type: 'select', index: 2 })
+    // The sidebar with all four sections, and a section list.
+    app.setSource(null) // back to the empty lens
+    app.setSource({ ...src, followed: async () => [{ id: 2, name: 'Alex', kind: 'person' }, { id: -3, name: 'Team', kind: 'group' }, { id: -4, name: 'News', kind: 'channel' }] })
+    app.input({ type: 'click', ring: false })
+    await new Promise(r => setTimeout(r, 0))
+    app.input({ type: 'down' })
+    app.input({ type: 'click', ring: false })
+    expect(pages.some(p => p.texts.some(x => x.name === 'side3'))).toBe(true)
     for (const p of pages) {
       const payload = toPayload(p)
       expect(validateEvenHubPageContainer(payload as never), JSON.stringify(p).slice(0, 200)).toEqual({ valid: true })

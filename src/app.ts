@@ -1,11 +1,11 @@
 // Ack's brain: a queue of cards, one view on the lens, and what each gesture does.
 // No SDK or Telegram imports here: everything comes in through Deps and Source, so it runs in tests.
 import { ago, fit, match, missingGlyphRatio, needsYes, order, replies, rowLabel, type Action, type Card } from './cards'
-import type { Bubble } from './cards-from'
+import type { Bubble, ChatKind } from './cards-from'
 import type { Input, Page } from './glasses'
 
 export interface PressResult { toast?: string; alert?: boolean; url?: string }
-export interface BotRef { id: number; name: string }
+export interface BotRef { id: number; name: string; kind?: ChatKind } // no kind: a bot
 export interface Command { command: string; description: string }
 
 export interface Source {
@@ -43,6 +43,7 @@ export interface Deps {
 }
 
 type Item = { label: string; run: () => void }
+type Section = { kind: ChatKind; chats: BotRef[] }
 type View =
   | { v: 'root' }
   | { v: 'card' }
@@ -51,9 +52,10 @@ type View =
   | { v: 'pending'; a: Action; key: string; left: number }
   | { v: 'wait'; a: Action; toast?: string }
   | { v: 'note'; text: string; head?: string }
-  | { v: 'bots'; bots: BotRef[]; from?: number }
-  | { v: 'cmds'; bot: BotRef; cmds: Command[] }
-  | { v: 'bot'; bot: BotRef; cards: Card[]; cmds: Command[] }
+  | { v: 'sections'; sections: Section[]; at: number }
+  | { v: 'bots'; title: string; bots: BotRef[]; from?: number; up?: View }
+  | { v: 'cmds'; bot: BotRef; cmds: Command[]; back: View }
+  | { v: 'bot'; bot: BotRef; cards: Card[]; cmds: Command[]; back: View }
   | { v: 'voice' }
   | { v: 'heard'; text: string; a?: Action }
 
@@ -72,7 +74,9 @@ const STEP_MS = 300
 const ROW_H = 40
 const BOTS_PER_PAGE = 18 // a glasses list holds 20 rows: room left for "More bots"
 const LINE_H = 27
-const MENU = [{ id: 1, label: 'Mute this chat 1 h' }, { id: 2, label: 'Read all' }, { id: 3, label: 'Clear all cards' }]
+const MENU = [{ id: 1, label: 'Mute this chat 1 h' }, { id: 2, label: 'Read all' }, { id: 3, label: 'Clear all cards' }, { id: 4, label: 'Your chats' }]
+const SECTIONS: Record<ChatKind, string> = { bot: 'Bots', person: 'People', group: 'Groups', channel: 'Channels' } // sidebar order
+const SIDE_W = 176 // the sidebar column, wide enough for "▶ Channels · 99"
 
 export class App {
   queue: Card[] = []
@@ -135,7 +139,7 @@ export class App {
     switch (v.v) {
       case 'root':
         if (i.type === 'double') return this.d.exit()
-        if (i.type === 'click') return this.source ? this.openBots() : this.d.onDemo?.()
+        if (i.type === 'click') return this.source ? this.openChats() : this.d.onDemo?.()
         return
       case 'card':
         if (i.type === 'select') return this.items[i.index]?.run()
@@ -154,11 +158,19 @@ export class App {
         if (i.type === 'click') { this.cancel(); return this.fire(v.a, v.key) }
         if (i.type === 'double') { this.cancel(); this.log(v.a, 'undone'); return this.note(`Undone: ${v.a.label}`) }
         return
+      case 'sections':
+        if (i.type === 'up' || i.type === 'down') return this.go({ ...v, at: Math.max(0, Math.min(v.sections.length - 1, v.at + (i.type === 'up' ? -1 : 1))) })
+        if (i.type === 'click') return this.openSection(v.sections[v.at], v)
+        if (i.type === 'double') return this.go({ v: 'root' })
+        return
       case 'bots':
+        if (i.type === 'select') return this.items[i.index]?.run()
+        if (i.type === 'double') return v.from ? this.go({ ...v, from: Math.max(0, v.from - BOTS_PER_PAGE) }) : this.go(v.up ?? { v: 'root' })
+        return
       case 'bot':
       case 'cmds':
         if (i.type === 'select') return this.items[i.index]?.run()
-        if (i.type === 'double') return v.v !== 'bots' ? void this.openBots() : v.from ? this.go({ ...v, from: Math.max(0, v.from - BOTS_PER_PAGE) }) : this.go({ v: 'root' })
+        if (i.type === 'double') return this.go(v.back)
         return
       case 'voice':
         if (i.type === 'longEnd' || i.type === 'click') return this.heard()
@@ -189,6 +201,7 @@ export class App {
       this.queue = []
       return this.go({ v: 'root' })
     }
+    if (id === 4) return void this.openChats()
   }
 
   // ---- actions ----------------------------------------------------------------
@@ -275,23 +288,34 @@ export class App {
 
   // ---- bots and commands -------------------------------------------------------
 
-  /** The chats the user picked for the glasses come first, then every bot. */
-  private async openBots() {
+  /**
+   * Tap on the empty lens: every bot and every chat picked for the glasses, in a sidebar of sections
+   * (bots, people, groups, channels) that swipes move through. A single section opens straight away.
+   */
+  private async openChats() {
     const picked = (await this.source?.followed?.()) ?? []
     const bots = ((await this.source?.bots()) ?? []).filter(b => !picked.some(p => p.id === b.id))
-    if (!picked.length && !bots.length) return this.note('No chats yet.\nStart one in Telegram.', 'Ack')
-    this.go({ v: 'bots', bots: [...picked, ...bots] })
+    const all = [...picked, ...bots]
+    const sections = (Object.keys(SECTIONS) as ChatKind[]).map(kind => ({ kind, chats: all.filter(c => (c.kind ?? 'bot') === kind) })).filter(s => s.chats.length)
+    if (!sections.length) return this.note('No chats yet.\nStart one in Telegram.', 'Ack')
+    if (sections.length === 1) return this.openSection(sections[0])
+    this.go({ v: 'sections', sections, at: 0 })
+  }
+
+  private openSection(s: Section, up?: View) {
+    this.go({ v: 'bots', title: SECTIONS[s.kind], bots: s.chats, up })
   }
 
   /** A chat from the lens: its last messages, newest first, buttons or not, then its command menu if it is a bot. */
   private async openBot(bot: BotRef) {
+    const back = this.view
     const [msgs, cmds] = await Promise.all([
       (this.source?.history?.(bot.id) ?? Promise.resolve([])).catch(() => [] as Bubble[]),
-      (this.source?.commands(bot.id) ?? Promise.resolve([])).catch(() => [] as Command[]),
+      (bot.kind && bot.kind !== 'bot' ? Promise.resolve([]) : this.source?.commands(bot.id) ?? Promise.resolve([])).catch(() => [] as Command[]),
     ])
     const cards = msgs.filter(b => !b.out).map(b => b.card).reverse().slice(0, 10)
     if (!cards.length && !cmds.length) return this.note('No messages here yet.', bot.name)
-    this.go({ v: 'bot', bot, cards, cmds })
+    this.go({ v: 'bot', bot, cards, cmds, back })
   }
 
   /** Opens a past message as a card: its buttons work as on any card, and a person gets the quick replies. */
@@ -415,19 +439,21 @@ export class App {
         return screen(from, 'Listening...', 'Tap or release: done   ·   Double tap: cancel')
       case 'heard':
         return screen(from, `"${v.text}"\n\n${v.a ? `→ ${rowLabel(v.a)}` : '→ Send it as a message'}`, 'Tap: yes   ·   Double tap: no')
+      case 'sections':
+        return sectionsPage(v.sections, v.at)
       case 'bots': {
         const from = v.from ?? 0
         const rest = v.bots.length - from - BOTS_PER_PAGE
         this.items = [
           ...v.bots.slice(from, from + BOTS_PER_PAGE).map(b => ({ label: b.name, run: () => void this.openBot(b) })),
-          ...(rest > 0 ? [{ label: `More chats (${rest})`, run: () => this.go({ v: 'bots', bots: v.bots, from: from + BOTS_PER_PAGE }) }] : []),
+          ...(rest > 0 ? [{ label: `More (${rest})`, run: () => this.go({ ...v, from: from + BOTS_PER_PAGE }) }] : []),
         ]
-        return listPage(from ? `Your chats · ${from + 1} to ${Math.min(from + BOTS_PER_PAGE, v.bots.length)}` : 'Your chats', this.items)
+        return listPage(from ? `${v.title} · ${from + 1} to ${Math.min(from + BOTS_PER_PAGE, v.bots.length)}` : v.title, this.items)
       }
       case 'bot':
         this.items = [
           ...v.cards.map(c => ({ label: `${ago(this.d.now() - c.date)} · ${c.text.split('\n').find(l => l.trim()) ?? '(no text)'}`, run: () => this.show(c) })),
-          ...(v.cmds.length ? [{ label: `Commands (${v.cmds.length})`, run: () => this.go({ v: 'cmds', bot: v.bot, cmds: v.cmds }) }] : []),
+          ...(v.cmds.length ? [{ label: `Commands (${v.cmds.length})`, run: () => this.go({ v: 'cmds', bot: v.bot, cmds: v.cmds, back: v }) }] : []),
         ]
         return listPage(v.bot.name, this.items)
       case 'cmds':
@@ -481,6 +507,25 @@ function bar(share: number): string {
   const n = 24
   const on = Math.max(0, Math.min(n, Math.round(share * n)))
   return '━'.repeat(on) + '─'.repeat(n - on)
+}
+
+/**
+ * The sidebar: one dim row per section and the chosen one bright, its chats on the right. Swipes only
+ * change texts and brightness, so the glasses update in place instead of rebuilding the page.
+ */
+export const SECTIONS_FOOT = 'Swipe: section   ·   Tap: open   ·   Double tap: back'
+function sectionsPage(sections: Section[], at: number): Page {
+  const chats = sections[at].chats.map(c => c.name)
+  const fits = Math.floor((H - HEAD_H - FOOT_H) / LINE_H)
+  const shown = chats.length > fits ? [...chats.slice(0, fits - 1), `+ ${chats.length - fits + 1} more`] : chats
+  return {
+    texts: [
+      { name: 'head', x: 8, y: 0, w: W - 16, h: HEAD_H, text: 'Your chats', color: 2 },
+      ...sections.map((s, n) => ({ name: `side${n}`, x: 8, y: HEAD_H + n * ROW_H, w: SIDE_W, h: ROW_H, text: `${n === at ? '▶ ' : ''}${SECTIONS[s.kind]} · ${s.chats.length}`, color: n === at ? 4 : 2 })),
+      { name: 'chats', x: SIDE_W + 16, y: HEAD_H, w: W - SIDE_W - 24, h: H - HEAD_H - FOOT_H, text: fit(shown.join('\n'), W - SIDE_W - 24, fits).text, color: 3, capture: true },
+      { name: 'foot', x: 8, y: H - FOOT_H, w: W - 16, h: FOOT_H, text: SECTIONS_FOOT, color: 2 },
+    ],
+  }
 }
 
 function listPage(title: string, items: Item[]): Page {
