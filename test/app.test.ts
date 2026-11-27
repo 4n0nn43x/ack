@@ -313,6 +313,30 @@ describe('bots and commands from the lens', () => {
   })
 })
 
+describe('chats picked for the glasses', () => {
+  it('come first in the lens list, and a person opens with the quick replies', async () => {
+    const alex: Card = { key: '201:5', chatId: 201, msgId: 5, from: 'Alex', isBot: false, text: 'Still on for 7pm?', date: t, actions: [], receivedAt: 0 }
+    app.setSource({
+      ...source,
+      followed: async () => [{ id: 201, name: 'Alex' }, { id: 7, name: '@BotFather' }],
+      history: async id => (id === 201 ? [{ id: 5, out: false, from: '', text: alex.text, date: t, buttons: [], card: alex }] : []),
+      commands: async id => (id === 201 ? [] : [{ command: 'mybots', description: 'Edit your bots' }]),
+    })
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(last().texts[0].text).toBe('Your chats')
+    expect(last().list!.items).toEqual(['Alex', '@BotFather']) // a followed bot is listed once
+    app.input({ type: 'select', index: 0 })
+    await flush()
+    app.input({ type: 'select', index: 0 })
+    expect(lens()).toContain('Still on for 7pm?')
+    expect(last().list!.items[0]).toContain('Yes')
+    app.input({ type: 'select', index: 0 })
+    await tick(UNDO_MS)
+    expect(pressed).toEqual(['Yes'])
+  })
+})
+
 describe('voice', () => {
   it('without a speech key, says how to add one', () => {
     app.upsert(card(1, [act('Deny')]))
@@ -410,7 +434,7 @@ describe('a bot opened from the lens', () => {
     await flush()
     app.input({ type: 'select', index: 0 })
     await flush()
-    expect(lens()).toContain('No messages from this bot yet.')
+    expect(lens()).toContain('No messages here yet.')
   })
 })
 
@@ -422,10 +446,10 @@ describe('a long bot list', () => {
     await flush()
     const first = last().list!.items
     expect(first).toHaveLength(19)
-    expect(first[18]).toBe('More bots (7)')
+    expect(first[18]).toBe('More chats (7)')
     app.input({ type: 'select', index: 18 })
     expect(last().list!.items).toEqual(many.slice(18).map(b => b.name))
-    expect(last().texts[0].text).toBe('Your bots · 19 to 25')
+    expect(last().texts[0].text).toBe('Your chats · 19 to 25')
     app.input({ type: 'double', ring: false })
     expect(last().list!.items[0]).toBe('Bot 0')
     app.input({ type: 'double', ring: false })

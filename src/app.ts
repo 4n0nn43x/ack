@@ -14,6 +14,7 @@ export interface Source {
   press(card: Card, action: Action): Promise<PressResult>
   send(chatId: number, text: string, replyTo?: number): Promise<void>
   bots(): Promise<BotRef[]>
+  followed?(): Promise<BotRef[]> // the people, groups and channels the user picked for the glasses
   commands(botId: number): Promise<Command[]>
   history?(chatId: number): Promise<Bubble[]> // a chat's last messages, oldest first
 }
@@ -274,25 +275,28 @@ export class App {
 
   // ---- bots and commands -------------------------------------------------------
 
+  /** The chats the user picked for the glasses come first, then every bot. */
   private async openBots() {
-    const bots = (await this.source?.bots()) ?? []
-    if (!bots.length) return this.note('No bot chats yet.\nStart one in Telegram.', 'Ack')
-    this.go({ v: 'bots', bots })
+    const picked = (await this.source?.followed?.()) ?? []
+    const bots = ((await this.source?.bots()) ?? []).filter(b => !picked.some(p => p.id === b.id))
+    if (!picked.length && !bots.length) return this.note('No chats yet.\nStart one in Telegram.', 'Ack')
+    this.go({ v: 'bots', bots: [...picked, ...bots] })
   }
 
-  /** A bot from the lens: its last messages, newest first, buttons or not, then its command menu if it has one. */
+  /** A chat from the lens: its last messages, newest first, buttons or not, then its command menu if it is a bot. */
   private async openBot(bot: BotRef) {
     const [msgs, cmds] = await Promise.all([
       (this.source?.history?.(bot.id) ?? Promise.resolve([])).catch(() => [] as Bubble[]),
       (this.source?.commands(bot.id) ?? Promise.resolve([])).catch(() => [] as Command[]),
     ])
     const cards = msgs.filter(b => !b.out).map(b => b.card).reverse().slice(0, 10)
-    if (!cards.length && !cmds.length) return this.note('No messages from this bot yet.', bot.name)
+    if (!cards.length && !cmds.length) return this.note('No messages here yet.', bot.name)
     this.go({ v: 'bot', bot, cards, cmds })
   }
 
-  /** Opens a past message as a card: its buttons work as on any card. */
+  /** Opens a past message as a card: its buttons work as on any card, and a person gets the quick replies. */
   private show(c: Card) {
+    if (!c.actions.length && !c.isBot && !c.readOnly) c = { ...c, actions: replies(this.settings.replies) }
     this.dismissed.delete(c.key)
     this.shown.add(c.key) // not a new message: no latency to measure
     this.queue = [c, ...this.queue.filter(x => x.key !== c.key)]
@@ -393,7 +397,7 @@ export class App {
     switch (v.v) {
       case 'root':
         return this.source
-          ? screen('Ack', 'Nothing waiting.', 'Tap: your bots   ·   Double tap: exit', 2)
+          ? screen('Ack', 'Nothing waiting.', 'Tap: your chats   ·   Double tap: exit', 2)
           : screen('Ack', 'Sign in to Telegram:\nopen Ack in the Even app\non your phone.', 'Tap: try the demo   ·   Double tap: exit', 2)
       case 'card':
         return c ? this.cardPage(c) : screen('Ack', 'Nothing waiting.', '', 2)
@@ -416,9 +420,9 @@ export class App {
         const rest = v.bots.length - from - BOTS_PER_PAGE
         this.items = [
           ...v.bots.slice(from, from + BOTS_PER_PAGE).map(b => ({ label: b.name, run: () => void this.openBot(b) })),
-          ...(rest > 0 ? [{ label: `More bots (${rest})`, run: () => this.go({ v: 'bots', bots: v.bots, from: from + BOTS_PER_PAGE }) }] : []),
+          ...(rest > 0 ? [{ label: `More chats (${rest})`, run: () => this.go({ v: 'bots', bots: v.bots, from: from + BOTS_PER_PAGE }) }] : []),
         ]
-        return listPage(from ? `Your bots · ${from + 1} to ${Math.min(from + BOTS_PER_PAGE, v.bots.length)}` : 'Your bots', this.items)
+        return listPage(from ? `Your chats · ${from + 1} to ${Math.min(from + BOTS_PER_PAGE, v.bots.length)}` : 'Your chats', this.items)
       }
       case 'bot':
         this.items = [

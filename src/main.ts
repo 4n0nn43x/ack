@@ -1,6 +1,7 @@
 import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { App, errorText, type LogEntry } from './app'
 import { DEFAULT_REPLIES, replies, type Card } from './cards'
+import { ACK_PLUS, inviteHash } from './cards-from'
 import { DemoSource } from './demo'
 import { browserBridge, Glasses, parseEvent } from './glasses'
 import { Phone, type Saved } from './phone'
@@ -47,6 +48,7 @@ const phone = new Phone(document.getElementById('app')!, saved, {
   ads: async id => (src?.kind === 'telegram' ? src.sponsored(id) : []),
   adSeen: r => { if (src?.kind === 'telegram') src.adViewed(r) },
   adClick: r => { if (src?.kind === 'telegram') src.adClicked(r) },
+  supporter: async () => src?.kind === 'telegram' && ACK_PLUS.link ? src.supporter(inviteHash(ACK_PLUS.link)).catch(() => false) : false,
 }, Boolean(ENV_ID && ENV_HASH))
 phone.log(log)
 phone.stats(lat)
@@ -103,7 +105,7 @@ function startDemo() {
   stop()
   saved.mode = 'demo'
   save()
-  const d = new DemoSource(take, () => replies(saved.replies))
+  const d = new DemoSource(take, () => replies(saved.replies), () => [...saved.people, ...saved.groups])
   d.onActivity = id => phone.activity(id)
   src = d
   app.setSource(d)

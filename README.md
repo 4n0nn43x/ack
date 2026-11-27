@@ -30,12 +30,12 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 - **Numbers stay exact.** Emoji the glasses can't draw become words (✅ becomes "OK") or disappear. Digits, prices, addresses and commands are never changed, and a test checks it.
 - **Buttons the lens can't run say so.** Links, Mini Apps and payments show "Finish on your phone" with the address. Copy buttons show their code, and disabled buttons are greyed.
 - **People too, without becoming a chat client.** Only the people you pick come to the glasses, in the same queue. You answer with your quick replies or by voice.
-- **Any bot from the lens.** Tap the empty lens to see your bots and pick one: its last messages come first, buttons or not (alerts, agent reports), then its "/" menu: `/mybots`, `/deploy`, `/status`...
+- **Any chat from the lens.** Tap the empty lens to see your chats: the people, groups and channels you picked come first, then every bot. Pick one: its last messages come first, buttons or not (alerts, agent reports), with your quick replies for a person, then a bot's "/" menu: `/mybots`, `/deploy`, `/status`...
 - **Voice when it is faster.** Hold, speak, release: "deny it" presses Deny. Anything else is sent as a message once you confirm. Transcription uses your own Groq or OpenAI key, kept on your phone.
 - **A phone app in Even's own design language.** It follows Even's published app guidelines (colours, type scale, spacing, official pixel icons) and has three tabs:
   - **Lens**: the lens drawn to scale, which you can drive from the phone with tap, double tap and swipes when the glasses are not at hand, plus the log of every decision and the message-to-lens latency measured on every card.
   - **Chats**: your Telegram chats with avatars, unread counts, search and filters. Open one to read it, send a message or press a bot's buttons; a button the bot marks dangerous takes a second tap, as on the lens. One switch per person, group or channel sends their messages to the glasses.
-  - **Settings**: quick replies, bots that skip the countdown, voice.
+  - **Settings**: Support Ack, quick replies, bots that skip the countdown, voice.
 - **Sign in with a QR code** scanned from Telegram on another device, or with your phone number. Nothing else to set up: like iMe or Nicegram, Ack ships with its own Telegram api_id.
 
 | Sign in | Lens | Chats | Chat | Settings |
@@ -92,7 +92,7 @@ Building from source: like the public repositories of iMe and Nicegram, this one
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 87 unit tests, production build, no API key in the repository
+npm run verify   # types, 90 unit tests, production build, no API key in the repository
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -143,12 +143,13 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Profile photos for avatars (file download) | `src/telegram.ts:133` |
 | Press an inline button: `messages.getBotCallbackAnswer` | `src/telegram.ts:194` |
 | Reply keyboards, quick replies and messages: send text | `src/telegram.ts:198` |
-| Bot command menus (`botInfo.commands`) | `src/telegram.ts:213` |
-| Official sponsored messages in channels and bot chats (`messages.getSponsoredMessages`, `viewSponsoredMessage`, `clickSponsoredMessage`), as the Telegram API terms (3.3) require | `src/telegram.ts:145`, `src/telegram.ts:156`, `src/telegram.ts:170`, `src/phone.ts:446` |
+| Bot command menus (`botInfo.commands`) | `src/telegram.ts:227` |
+| Official sponsored messages in channels and bot chats (`messages.getSponsoredMessages`, `viewSponsoredMessage`, `clickSponsoredMessage`), as the Telegram API terms (3.3) require | `src/telegram.ts:145`, `src/telegram.ts:156`, `src/telegram.ts:170`, `src/phone.ts:447` |
+| Telegram Stars subscriptions read from the user's own account (`payments.getStarsSubscriptions`), for Ack+ | `src/telegram.ts:216`, `src/cards-from.ts:205`, `src/phone.ts:594` |
 | Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:83-86` |
 | Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:69-73` |
 | Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:91` |
-| Callback toasts and alerts | `src/app.ts:228` |
+| Callback toasts and alerts | `src/app.ts:229` |
 | Rich messages | `src/cards-from.ts:167` |
 
 ### Even Hub SDK features used
@@ -160,7 +161,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Native list selection, swipe handled by firmware | `src/glasses.ts:36` |
 | Long press and release for voice (SDK 0.0.14+) | `src/glasses.ts:54` |
 | Ring vs temple source on taps | `src/glasses.ts:28` |
-| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:175` |
+| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:176` |
 | Text brightness levels (`textColor`) for hierarchy | `src/app.ts` |
 | Glasses microphone (`audioControl`) | `src/glasses.ts:145` |
 | Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:146` |
@@ -185,6 +186,18 @@ The full policy, permission by permission, is in [PRIVACY.md](PRIVACY.md).
 - Each press can be undone for 1.5 s, and bots you trust can skip the countdown in settings. Buttons a bot marks dangerous, or whose label cannot be undone, always ask for confirmation, on the lens and on the phone.
 - Voice audio is captured only while you hold. It goes straight from your phone to the transcription service you chose, with your own key.
 - The repository holds no secrets. Ack's Telegram api_id comes from `.env.local`, which git ignores, and is injected into the build, as iMe and Nicegram do. `npm run verify` and `npm run pack` fail if it ever lands in a file git would commit.
+
+## Business model
+
+**Ack is free, and what is free stays free.** No caps on bots, cards, chats or voice, no ads of our own on your eyes, no data sold. Other Telegram clients sell feature tiers or show their own ads. Ack locks nothing, and earns in Telegram's own currency:
+
+| | Who pays | How it works |
+| --- | --- | --- |
+| **Ack+**, 250 Stars a month (live) | People who use Ack every day | A Telegram Stars subscription to Ack's private channel, from **Settings, Support Ack**. Telegram bills it, and Ack reads it from the user's own account (`payments.getStarsSubscriptions`), so there is still no Ack server. It unlocks nothing: it keeps Ack free and independent for everyone. |
+| **Bot referrals** (next) | Bots, never the user | Telegram's affiliate programs pay a share of the Stars a user spends in a bot reached through a referral link. Bots that Ack suggests on the phone carry Ack's link, at no cost to the user. |
+| **Ack for Teams** (next) | Companies whose agents and ops bots ask for approvals | A shared list of trusted bots and the decision log sent to the team's own systems, per seat. |
+
+Stars are withdrawn in TON through Fragment, so every line feeds the Telegram and TON economy. As the Telegram API terms (3.2) ask, every way Ack makes money is listed in its store description.
 
 ## Project layout
 

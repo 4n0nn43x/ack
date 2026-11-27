@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adCard, adNeedsConfirm, bubbleFrom, cardFrom, idScope, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type MsgLike } from '../src/cards-from'
+import { adCard, adNeedsConfirm, bubbleFrom, cardFrom, idScope, inviteHash, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, supports, waitingIn, type MsgLike } from '../src/cards-from'
 import { replies } from '../src/cards'
 
 const me = replies(['Yes', 'Later'])
@@ -209,5 +209,22 @@ describe('live mtcute messages', () => {
 
   it("take a partial peer's name from the dialogs already seen", () => {
     expect(cardFrom(msgLike(m, id => (id === 10 ? 'CI deploys' : undefined)), [], me)!.from).toBe('CI deploys')
+  })
+})
+
+describe('Ack+ supporters, checked from the user\'s own Star subscriptions', () => {
+  it('reads the hash of both invite link forms', () => {
+    expect(inviteHash('https://t.me/+AbC_d-12')).toBe('AbC_d-12')
+    expect(inviteHash('t.me/joinchat/XyZ9')).toBe('XyZ9')
+    expect(inviteHash('https://t.me/ack_app')).toBe('')
+  })
+
+  it('counts only a paid period through that link, a cancelled one until its end', () => {
+    const sub = (hash: string, until: number, canceled = false) => ({ _: 'starsSubscription', chatInviteHash: hash, untilDate: until, canceled })
+    expect(supports([sub('AbC', 2000)], 'AbC', 1000)).toBe(true)
+    expect(supports([sub('AbC', 2000, true)], 'AbC', 1000)).toBe(true)
+    expect(supports([sub('AbC', 900)], 'AbC', 1000)).toBe(false)
+    expect(supports([sub('Other', 2000)], 'AbC', 1000)).toBe(false)
+    expect(supports([sub('', 2000)], '', 1000)).toBe(false)
   })
 })

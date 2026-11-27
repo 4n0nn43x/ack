@@ -3,7 +3,7 @@
 import { renderSVG } from 'uqr'
 import type { LogEntry } from './app'
 import { needsYes, type Action } from './cards'
-import { adNeedsConfirm, type Bubble, type ChatKind, type ChatRow, type Sponsored } from './cards-from'
+import { ACK_PLUS, adNeedsConfirm, type Bubble, type ChatKind, type ChatRow, type Sponsored } from './cards-from'
 import type { Input, Page } from './glasses'
 import { PROVIDERS, type Provider } from './voice'
 
@@ -35,6 +35,7 @@ export interface Handlers {
   ads(chatId: number): Promise<Sponsored[]> // Telegram's official sponsored messages for a channel or a bot
   adSeen(random: Uint8Array): void
   adClick(random: Uint8Array): void
+  supporter(): Promise<boolean> // pays Ack+, read from the user's own Telegram account
 }
 
 export interface Pick { id: number; name: string }
@@ -546,6 +547,8 @@ export class Phone {
         <div class="row"><span class="avatar">${esc(initials(this.who.replace(/^Signed in as /, '') || 'Ack'))}</span>
           <span class="main"><span class="name">${esc(this.who || 'Not signed in')}</span><span class="prev">${this.s.mode === 'demo' ? 'Scripted bots, nothing reaches Telegram' : 'Your session stays on this phone'}</span></span></div>
       </div>
+      ${ACK_PLUS.link ? `<h3 class="section">Support Ack</h3>
+      <div id="plus" class="card form">${this.plusHtml(false)}</div>` : ''}
       <h3 class="section">Quick replies to people</h3>
       <div class="card form">
         <textarea id="replies" rows="4">${esc(this.s.replies.join('\n'))}</textarea>
@@ -578,6 +581,22 @@ export class Phone {
       this.toast('Settings saved')
     }
     $(el, '#leave').onclick = () => this.h.leave()
+    const plus = el.querySelector<HTMLElement>('#plus')
+    if (plus) {
+      const check = () => void this.h.supporter().then(on => { if (on && plus.isConnected) plus.innerHTML = this.plusHtml(true) })
+      const go = plus.querySelector<HTMLButtonElement>('#plus-go')
+      if (go) go.onclick = () => { window.addEventListener('focus', check, { once: true }); window.open(ACK_PLUS.link, '_blank', 'noopener') }
+      check()
+    }
+  }
+
+  /** Ack+ never unlocks or limits anything: it is how people who like Ack keep it free for everyone. */
+  private plusHtml(on: boolean): string {
+    return on
+      ? `<p class="label">${icon('check')} You support Ack</p><p class="hint">Thank you. Ack stays free and unlimited for everyone because of you.</p>`
+      : `<p class="label">Ack+ · ${ACK_PLUS.stars} Stars a month</p>
+        <p class="hint">Ack is free, with no limits, and stays that way. Ack+ is how people who use it every day keep it independent. Paid in Telegram, cancel anytime.</p>
+        <button id="plus-go" class="btn dark">Support Ack</button>`
   }
 
   private toast(text: string, warn = false) {

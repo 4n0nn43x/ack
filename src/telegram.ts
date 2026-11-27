@@ -3,7 +3,7 @@
 import { TelegramClient, WebCryptoProvider, type Chat as TgChat, type Dialog, type Message, type User } from '@mtcute/web'
 import wasmUrl from '@mtcute/wasm/mtcute.wasm?url' // explicit URL: works in Vite dev and in the packed .ehpk
 import type { BotRef, Command, PressResult, Source } from './app'
-import { adCard, bubbleFrom, cardFrom, idScope, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type Bubble, type ChatKind, type ChatRow, type MsgLike, type PeerLike, type Sponsored } from './cards-from'
+import { adCard, bubbleFrom, cardFrom, idScope, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, supports, waitingIn, type Bubble, type ChatKind, type ChatRow, type MsgLike, type PeerLike, type Sponsored } from './cards-from'
 import { clean, type Action, type Card } from './cards'
 
 export interface LoginUI {
@@ -201,6 +201,20 @@ export class TelegramSource implements Source {
 
   async bots(): Promise<BotRef[]> {
     return this.list('bot').map(({ id, name }) => ({ id, name }))
+  }
+
+  /** The people, groups and channels the user picked for the glasses, for the lens chat list. */
+  async followed(): Promise<BotRef[]> {
+    return this.follow().flatMap(id => { const c = this.recent.get(id); return c ? [{ id, name: c.name }] : [] })
+  }
+
+  /**
+   * Ack+: whether the user pays the Star subscription behind Ack's invite link. Telegram bills it, and
+   * the user's own account lists its subscriptions, so no Ack server is needed to check it.
+   */
+  async supporter(hash: string): Promise<boolean> {
+    const r = await this.tg.call({ _: 'payments.getStarsSubscriptions', peer: { _: 'inputPeerSelf' }, offset: '' })
+    return supports(r.subscriptions ?? [], hash, Date.now() / 1000)
   }
 
   /** Chats of one kind, most recent first, for the phone settings. */

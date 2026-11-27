@@ -79,7 +79,7 @@ export class DemoSource implements Source {
   private logs = new Map<number, Bubble[]>() // what the phone's chat view shows, per chat
   onActivity: (chatId: number) => void = () => {}
 
-  constructor(private sink: (c: Card) => void, private replies: () => Action[]) {}
+  constructor(private sink: (c: Card) => void, private replies: () => Action[], private follow: () => number[] = () => []) {}
 
   start() {
     for (const [id, screen, at] of SCRIPT) {
@@ -148,6 +148,7 @@ export class DemoSource implements Source {
   }
 
   async bots(): Promise<BotRef[]> { return BOTS.map(b => ({ id: b.id, name: b.name })) }
+  async followed(): Promise<BotRef[]> { return this.follow().includes(ALEX) ? [{ id: ALEX, name: 'Alex' }] : [] }
 
   async chats(): Promise<ChatRow[]> {
     const last = (id: number) => this.logs.get(id)?.at(-1)

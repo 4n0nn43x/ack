@@ -10,7 +10,7 @@ Ack uses the network permission for these hosts only. They are the only ones lis
 
 | Host | When | What goes there |
 | --- | --- | --- |
-| `pluto`, `venus`, `aurora`, `vesta` and `flora.web.telegram.org` (WebSocket) | While you are signed in | What any Telegram client sends: signing in, the messages and commands you send, the buttons you press (Telegram passes them to that bot), read receipts for the messages you open or that the lens shows, and the views and clicks of Telegram's sponsored messages, as Telegram's API terms require. [Telegram's privacy policy](https://telegram.org/privacy) applies. |
+| `pluto`, `venus`, `aurora`, `vesta` and `flora.web.telegram.org` (WebSocket) | While you are signed in | What any Telegram client sends: signing in, the messages and commands you send, the buttons you press (Telegram passes them to that bot), read receipts for the messages you open or that the lens shows, the views and clicks of Telegram's sponsored messages, as Telegram's API terms require, and, on the Settings tab, a request for your own Telegram Stars subscriptions, to show whether you support Ack (Ack+). The answer stays on your phone. [Telegram's privacy policy](https://telegram.org/privacy) applies. |
 | `api.groq.com` or `api.openai.com` | Only if you turn on voice with your own key, and only after you hold to speak | The recording of what you said while holding, and a short hint so names are spelled right: who sent the card and its button labels. The provider you chose handles it under its own policy. |
 
 Ack has no analytics, no tracking, no advertising of its own and no crash reporting.

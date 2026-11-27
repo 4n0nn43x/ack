@@ -189,6 +189,23 @@ export function preview(m: Pick<MsgLike, 'text' | 'media' | 'richMessage'> & Par
 }
 
 /** A message for the phone's chat view, with its buttons ready to press. */
+/**
+ * Ack+: a monthly Telegram Stars subscription to Ack's private channel, through this invite link.
+ * Ack stays free and unlimited without it. Empty until the channel exists: the phone then hides the offer.
+ */
+export const ACK_PLUS = { link: '', stars: 250 }
+
+/** The hash of a t.me/+hash or t.me/joinchat/hash invite link. */
+export function inviteHash(link: string): string {
+  return /(?:\+|joinchat\/)([\w-]+)/.exec(link)?.[1] ?? ''
+}
+
+/** True while one of the user's Star subscriptions through that link is paid for (a cancelled one runs to its end). */
+// ponytail: matches the invite hash, so a revoked and recreated link drops current supporters; match the channel id if that happens.
+export function supports(subs: { _: string; chatInviteHash?: string; untilDate?: number }[], hash: string, nowSec: number): boolean {
+  return !!hash && subs.some(s => s.chatInviteHash === hash && (s.untilDate ?? 0) > nowSec)
+}
+
 export function bubbleFrom(m: MsgLike): Bubble {
   const raw = ((m.markup?.type === 'inline' || m.markup?.type === 'reply') ? (m.markup.buttons ?? []) : []) as RawButton[][]
   const actions = m.markup?.type === 'inline' ? fromInline(raw) : m.markup?.type === 'reply' ? fromReply(raw) : []
