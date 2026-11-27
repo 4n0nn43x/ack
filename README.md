@@ -48,7 +48,9 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 
 ## Try it in 2 minutes, no account needed
 
-You need Node 20 or later. No glasses needed.
+**In your browser, nothing to install: [4n0nn43x.github.io/ack](https://4n0nn43x.github.io/ack/).** The demo starts on its own. The black frame is what Even G2 shows, drawn to scale: drive it with the arrows, Tap and Double tap, like the temple or the R1 ring.
+
+In the official Even Hub simulator, with Node 20 or later and no glasses:
 
 ```bash
 npm install -g @evenrealities/evenhub-simulator

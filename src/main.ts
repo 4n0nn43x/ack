@@ -165,4 +165,5 @@ async function leave() {
 
 if (saved.mode === 'demo') startDemo()
 else if (saved.mode === 'telegram') void startTelegram()
+else if (import.meta.env.VITE_BROWSER === '1') startDemo() // the try-it page opens straight on the demo
 else phone.status('Not signed in')
