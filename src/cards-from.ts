@@ -1,6 +1,5 @@
 // A Telegram message to a card (lens) or a bubble (phone). Kept apart from the client so it is tested without a connection.
 import { clean, fromInline, fromReply, type Action, type Card, type RawButton } from './cards'
-import { walletCard, walletLine } from './wallet'
 
 export type ChatKind = 'bot' | 'person' | 'group' | 'channel'
 
@@ -42,7 +41,6 @@ export interface MsgLike {
   markup: { type: string; buttons?: unknown[][] } | null
   media: unknown
   richMessage?: unknown
-  raw?: unknown // the TL message, read for wallet service actions
 }
 
 const at = (s: string) => (s.startsWith('@') ? s : `@${s}`)
@@ -110,7 +108,7 @@ export function msgLike(m: MsgLike, names: (id: number) => string | undefined): 
   })
   return {
     id: m.id, isOutgoing: m.isOutgoing, isService: m.isService, text: m.text, date: m.date, chat: peer(m.chat),
-    sender: peer(m.sender), markup: m.markup, media: m.media, richMessage: m.richMessage, raw: m.raw,
+    sender: peer(m.sender), markup: m.markup, media: m.media, richMessage: m.richMessage,
   }
 }
 
@@ -151,7 +149,7 @@ export const idScope = (chat: PeerLike): number => (chat.type === 'chat' && chat
  * In groups, replies go back as a reply to the message. Channels are read-only.
  */
 export function cardFrom(m: MsgLike, follow: number[], replies: Action[]): Card | null {
-  if (m.isService) return walletCard(m, Date.now())
+  if (m.isService) return null
   if (m.isOutgoing) return null
   const privateChat = m.chat.type === 'user'
   const privateBot = privateChat && !!m.chat.isBot
@@ -186,7 +184,6 @@ export function cardFrom(m: MsgLike, follow: number[], replies: Action[]): Card 
 
 /** What a message says in one line, for chat list previews and media-only messages. */
 export function preview(m: Pick<MsgLike, 'text' | 'media' | 'richMessage'> & Partial<MsgLike>): string {
-  if (m.raw && m.isService) { const w = walletLine(m as MsgLike); if (w) return w }
   const media = (m.media as { type?: string } | null)?.type
   return m.text || (media ? `[${media}]` : m.richMessage ? '[rich message]' : '')
 }

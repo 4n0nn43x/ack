@@ -25,7 +25,6 @@ export interface Card {
   receivedAt: number // performance.now() when Ack received it, for latency
   replyTo?: number // in groups, answers go back as a reply to this message
   readOnly?: boolean // channels: nothing can be sent back
-  wallet?: boolean // a Gram wallet event: the balance should be refreshed
   ad?: Uint8Array // a channel's sponsored message (its random_id): the view is reported once shown
 }
 

@@ -3,7 +3,6 @@
 import type { BotRef, Command, PressResult, Source } from './app'
 import { clean, type Action, type Card, type Style } from './cards'
 import type { Bubble, ChatRow } from './cards-from'
-import { gram, tonConnectCard, transferCard, type WalletView } from './wallet'
 
 type Btn = [label: string, next: string, style?: Style] | [label: string, url: { url: string }]
 interface Screen { text: string; buttons: Btn[][]; toast?: string }
@@ -69,15 +68,6 @@ const BOTS: Bot[] = [
 ]
 
 const ALEX = 201
-const WALLET = 301 // the demo's Gram wallet service chat
-const DAY = 86_400_000
-// The demo wallet: obviously not a real address, and nothing here touches a blockchain.
-const DEMO_ADDRESS = 'UQDemoWallet_nothing_here_is_real_00000000000ACK'
-const DEMO_TXS = (now: number): WalletView['txs'] => [
-  { id: 'd1', incoming: false, amount: '3.2', peer: 'ston.fi', comment: 'Swap to USDT', date: now - DAY, failed: false },
-  { id: 'd2', incoming: true, amount: '50', peer: 'MoonPay', comment: '', date: now - 3 * DAY, failed: false },
-  { id: 'd3', incoming: false, amount: '12', peer: 'Alex', comment: 'Concert tickets', date: now - 5 * DAY, failed: false },
-]
 // The opening sequence: when each bot speaks first (ms after the demo starts).
 const SCRIPT: [botId: number, screen: string, at: number][] = [[101, 'ask', 900], [102, 'ask', 7000], [ALEX, '', 15000], [103, 'ask', 24000], [105, 'ask', 40000]]
 
@@ -87,9 +77,6 @@ export class DemoSource implements Source {
   private state = new Map<string, { bot: Bot; screen: string }>()
   private timers: number[] = []
   private logs = new Map<number, Bubble[]>() // what the phone's chat view shows, per chat
-  private nano = 142_750_000_000n // demo balance, in nano-GRAM
-  private received: WalletView['txs'] = []
-  private started = Date.now()
   onActivity: (chatId: number) => void = () => {}
 
   constructor(private sink: (c: Card) => void, private replies: () => Action[]) {}
@@ -98,7 +85,6 @@ export class DemoSource implements Source {
     for (const [id, screen, at] of SCRIPT) {
       this.timers.push(window.setTimeout(() => id === ALEX ? this.alex() : this.post(BOTS.find(b => b.id === id)!, screen), at))
     }
-    this.timers.push(window.setTimeout(() => this.gramIn(), 30_000), window.setTimeout(() => this.tonConnect(), 52_000))
   }
 
   stop() { this.timers.forEach(clearTimeout) }
@@ -120,26 +106,6 @@ export class DemoSource implements Source {
   private alex() {
     const c: Card = { key: `${ALEX}:${this.msg}`, chatId: ALEX, msgId: this.msg++, from: 'Alex', isBot: false, text: 'Still on for 7pm? I booked the table at Zuma.', date: Date.now(), actions: this.replies(), receivedAt: performance.now() }
     this.show(c, c.actions.map(a => a.value ?? a.label))
-  }
-
-  /** Alex pays back his share of dinner in Gram: a transfer card, and the demo balance goes up. */
-  private gramIn() {
-    const nano = 25_000_000_000n
-    this.nano += nano
-    this.received.unshift({ id: `in${this.msg}`, incoming: true, amount: gram(nano), peer: 'Alex', comment: 'Zuma, my share', date: Date.now(), failed: false })
-    const c = transferCard({ key: `${ALEX}:${this.msg}`, chatId: ALEX, msgId: this.msg++, date: Date.now() }, 'Alex', nano, 'Zuma, my share')
-    this.show(c, c.actions.map(a => a.label))
-  }
-
-  /** A dApp asks to connect to the wallet: the lens warns, the decision stays in Telegram on the phone. */
-  private tonConnect() {
-    const now = Date.now()
-    const c = tonConnectCard({ key: `${WALLET}:${this.msg}`, chatId: WALLET, msgId: this.msg++, date: now }, 'STON.fi', now + 5 * 60_000, now)
-    this.show(c, c.actions.map(a => a.label))
-  }
-
-  async wallet(): Promise<WalletView> {
-    return { balance: gram(this.nano), address: DEMO_ADDRESS, txs: [...this.received, ...DEMO_TXS(this.started)] }
   }
 
   /** Sends a card to the lens and keeps it in that chat's history for the phone (an edit replaces the message). */

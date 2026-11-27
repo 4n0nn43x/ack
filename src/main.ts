@@ -86,21 +86,8 @@ app.render()
 console.log('[ack] ready')
 setInterval(() => { if (app.view.v === 'card') app.render() }, 30_000) // keeps "2m ago" honest
 
-/** Every card goes to the lens; a Gram wallet event also refreshes the balance. */
-function take(c: Card) {
-  app.upsert(c)
-  if (c.wallet) void refreshWallet()
-}
-
-/** The Gram wallet, read only, on the lens and the phone. Missing wallet or API: both just hide it. */
-async function refreshWallet() {
-  const s = src
-  const w = s?.wallet ? await s.wallet().catch(() => null) : null
-  if (s !== src) return
-  app.setWallet(w)
-  phone.wallet(w)
-}
-setInterval(() => { if (src) void refreshWallet() }, 60_000)
+/** Every card goes to the lens. */
+const take = (c: Card) => app.upsert(c)
 
 function stop() {
   if (src?.kind === 'demo') src.stop()
@@ -122,7 +109,6 @@ function startDemo() {
   d.start()
   phone.status('Demo', 'live')
   settingsFor(d)
-  void refreshWallet()
 }
 
 async function startTelegram(firstPhone?: string, qr = false) {
@@ -152,8 +138,7 @@ async function startTelegram(firstPhone?: string, qr = false) {
     phone.status(`Connected · ${t.me?.displayName ?? ''}`, 'live')
     await t.scan()
     settingsFor(t)
-    void refreshWallet()
-  } catch (e) {
+    } catch (e) {
     console.error('[ack] telegram', e)
     phone.status(errorText(e).split('\n')[0], 'warn')
     phone.showSignin('phone')
@@ -167,7 +152,6 @@ async function leave() {
   saved.mode = 'none'
   save()
   app.setSource(null)
-  phone.wallet(null)
   phone.status('Signed out')
   phone.signedOut()
 }

@@ -5,7 +5,6 @@ import wasmUrl from '@mtcute/wasm/mtcute.wasm?url' // explicit URL: works in Vit
 import type { BotRef, Command, PressResult, Source } from './app'
 import { adCard, bubbleFrom, cardFrom, idScope, msgLike, nameOf, preview, shouldSurface, sponsoredFrom, waitingIn, type Bubble, type ChatKind, type ChatRow, type MsgLike, type PeerLike, type Sponsored } from './cards-from'
 import { clean, type Action, type Card } from './cards'
-import { walletFrom, walletLine, type WalletView } from './wallet'
 
 export interface LoginUI {
   ask(kind: 'phone' | 'code' | 'password'): Promise<string>
@@ -122,21 +121,7 @@ export class TelegramSource implements Source {
   async history(chatId: number): Promise<Bubble[]> {
     const msgs = await this.tg.getHistory(chatId, { limit: 40 })
     void this.tg.readHistory(chatId).catch(() => {})
-    return [...msgs].reverse().filter(m => !m.isService || walletLine(this.named(m))).map(m => bubbleFrom(this.named(m)))
-  }
-
-  /** The Gram wallet, read only (wallet.getState, wallet.getTransactions). Null when the account has no wallet. */
-  async wallet(): Promise<WalletView | null> {
-    try {
-      const state = await this.tg.call({ _: 'wallet.getState' })
-      console.log(`[ack] wallet ${state._}`)
-      if (state._ !== 'walletState') return null
-      const txs = await this.tg.call({ _: 'wallet.getTransactions', offset: '', limit: 6 }).catch(() => null)
-      return walletFrom(state, txs as Parameters<typeof walletFrom>[1])
-    } catch (e) {
-      console.log(`[ack] wallet unavailable: ${(e as Error).message ?? e}`)
-      return null
-    }
+    return [...msgs].reverse().filter(m => !m.isService).map(m => bubbleFrom(this.named(m)))
   }
 
   /** A chat's small profile photo as an object URL, downloaded once. */

@@ -6,7 +6,6 @@ import { needsYes, type Action } from './cards'
 import { adNeedsConfirm, type Bubble, type ChatKind, type ChatRow, type Sponsored } from './cards-from'
 import type { Input, Page } from './glasses'
 import { PROVIDERS, type Provider } from './voice'
-import { shortAddress, type WalletView } from './wallet'
 
 export interface Saved {
   mode: 'none' | 'demo' | 'telegram'
@@ -83,7 +82,6 @@ export class Phone {
   private armed = '' // a dangerous button waiting for its second tap
   private refresh = 0
   private qrUrl = ''
-  private gramWallet: WalletView | null = null
 
   constructor(private root: HTMLElement, private s: Saved, private h: Handlers, private hasEnvKeys: boolean) {
     root.innerHTML = `
@@ -161,13 +159,6 @@ export class Phone {
     this.ms = ms
     const el = this.root.querySelector<HTMLElement>('#stats')
     if (el) el.innerHTML = this.statsHtml()
-  }
-
-  /** The Gram wallet, read only, shown on the Lens tab. */
-  wallet(w: WalletView | null) {
-    this.gramWallet = w
-    const el = this.root.querySelector<HTMLElement>('#wallet')
-    if (el) { el.innerHTML = this.walletHtml(); this.bindWallet(el) }
   }
 
   /** A message arrived or changed in a chat: refresh what the phone shows of it. */
@@ -287,38 +278,12 @@ export class Phone {
         <div id="lensmenu" class="menu" hidden></div>
       </div>
       <p class="hint pad">Drives the lens like the temple or the R1 ring would.</p>
-      <div id="wallet">${this.walletHtml()}</div>
       <h3 class="section">Decisions</h3>
       <div id="log" class="card list">${this.logHtml()}</div>
       <h3 class="section">Message to lens</h3>
       <div id="stats" class="card">${this.statsHtml()}</div>`
     this.drawMirror($(el, '#mirror'))
     for (const b of el.querySelectorAll<HTMLButtonElement>('[data-in]')) b.onclick = () => this.remote(b.dataset.in!)
-    this.bindWallet(el)
-  }
-
-  private walletHtml(): string {
-    const w = this.gramWallet
-    if (!w) return ''
-    const txs = w.txs.slice(0, 5).map(t => `
-      <div class="row">
-        <span class="main"><span class="name">${esc(t.peer)}</span><span class="prev">${esc(t.comment || (t.incoming ? 'Received' : 'Sent'))}${t.failed ? ' · failed' : ''}</span></span>
-        <span class="side"><span class="amt${t.incoming ? ' in' : ''}">${t.incoming ? '+' : '-'}${esc(t.amount)}</span><span class="time">${when(t.date)}</span></span>
-      </div>`).join('')
-    return `
-      <h3 class="section">Gram wallet</h3>
-      <div class="card wallet">
-        <div class="bal"><b>${esc(w.balance)}</b><span>GRAM</span></div>
-        <button id="addr" class="addr" aria-label="Copy the wallet address">${esc(shortAddress(w.address))}${icon('copy', 'ic small')}</button>
-        ${txs ? `<div class="txs">${txs}</div>` : '<p class="empty">No transfers yet.</p>'}
-        <p class="hint">Read only: Ack never signs or sends anything from your wallet.</p>
-      </div>`
-  }
-
-  private bindWallet(el: HTMLElement) {
-    const addr = el.querySelector<HTMLButtonElement>('#addr')
-    const w = this.gramWallet
-    if (addr && w) addr.onclick = () => void navigator.clipboard?.writeText(w.address).then(() => this.toast('Address copied'), () => this.toast(w.address))
   }
 
   private drawMirror(el: HTMLElement) {

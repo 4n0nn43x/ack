@@ -1,7 +1,6 @@
 // Ack's brain: a queue of cards, one view on the lens, and what each gesture does.
 // No SDK or Telegram imports here: everything comes in through Deps and Source, so it runs in tests.
-import { ago, clean, fit, match, missingGlyphRatio, needsYes, order, replies, rowLabel, type Action, type Card } from './cards'
-import { shortAddress, type WalletView } from './wallet'
+import { ago, fit, match, missingGlyphRatio, needsYes, order, replies, rowLabel, type Action, type Card } from './cards'
 import type { Bubble } from './cards-from'
 import type { Input, Page } from './glasses'
 
@@ -16,7 +15,6 @@ export interface Source {
   send(chatId: number, text: string, replyTo?: number): Promise<void>
   bots(): Promise<BotRef[]>
   commands(botId: number): Promise<Command[]>
-  wallet?(): Promise<WalletView | null> // the Gram wallet, read only
   history?(chatId: number): Promise<Bubble[]> // a chat's last messages, oldest first
 }
 
@@ -55,7 +53,6 @@ type View =
   | { v: 'bots'; bots: BotRef[]; from?: number }
   | { v: 'cmds'; bot: BotRef; cmds: Command[] }
   | { v: 'bot'; bot: BotRef; cards: Card[]; cmds: Command[] }
-  | { v: 'wallet' }
   | { v: 'voice' }
   | { v: 'heard'; text: string; a?: Action }
 
@@ -72,7 +69,7 @@ const HEAD_H = 32
 const FOOT_H = 32
 const STEP_MS = 300
 const ROW_H = 40
-const BOTS_PER_PAGE = 18 // a glasses list holds 20 rows: room for the wallet and "More bots"
+const BOTS_PER_PAGE = 18 // a glasses list holds 20 rows: room left for "More bots"
 const LINE_H = 27
 const MENU = [{ id: 1, label: 'Mute this chat 1 h' }, { id: 2, label: 'Read all' }, { id: 3, label: 'Clear all cards' }]
 
@@ -88,7 +85,6 @@ export class App {
   private items: Item[] = []
   private flash = { key: '', text: '', until: 0 }
   private pressed: Pressed | null = null
-  wallet: WalletView | null = null
 
   constructor(private d: Deps, public settings: Settings) {}
 
@@ -96,7 +92,6 @@ export class App {
 
   setSource(s: Source | null) {
     this.source = s
-    this.wallet = null
     this.queue = []
     this.pressed = null
     this.go(this.view.v === 'root' || !s ? { v: 'root' } : this.view)
@@ -120,12 +115,6 @@ export class App {
     // Latency is "message in, card on the lens": cards that wait in the queue are not measured.
     if (this.queue[0].key !== c.key || this.view.v !== 'card') this.shown.add(c.key)
     this.render()
-  }
-
-  /** The latest Gram wallet state, shown on the calm lens and in the wallet page. */
-  setWallet(w: WalletView | null) {
-    this.wallet = w
-    if (this.view.v === 'root' || this.view.v === 'wallet') this.render()
   }
 
   remove(key: string) {
@@ -169,9 +158,6 @@ export class App {
       case 'cmds':
         if (i.type === 'select') return this.items[i.index]?.run()
         if (i.type === 'double') return v.v !== 'bots' ? void this.openBots() : v.from ? this.go({ ...v, from: Math.max(0, v.from - BOTS_PER_PAGE) }) : this.go({ v: 'root' })
-        return
-      case 'wallet':
-        if (i.type === 'click' || i.type === 'double') return void this.openBots()
         return
       case 'voice':
         if (i.type === 'longEnd' || i.type === 'click') return this.heard()
@@ -290,7 +276,7 @@ export class App {
 
   private async openBots() {
     const bots = (await this.source?.bots()) ?? []
-    if (!bots.length && !this.wallet) return this.note('No bot chats yet.\nStart one in Telegram.', 'Ack')
+    if (!bots.length) return this.note('No bot chats yet.\nStart one in Telegram.', 'Ack')
     this.go({ v: 'bots', bots })
   }
 
@@ -407,7 +393,7 @@ export class App {
     switch (v.v) {
       case 'root':
         return this.source
-          ? screen('Ack', `Nothing waiting.${this.wallet ? `\n\nGram wallet  ${this.wallet.balance} GRAM` : ''}`, 'Tap: your bots   ·   Double tap: exit', 2)
+          ? screen('Ack', 'Nothing waiting.', 'Tap: your bots   ·   Double tap: exit', 2)
           : screen('Ack', 'Sign in to Telegram:\nopen Ack in the Even app\non your phone.', 'Tap: try the demo   ·   Double tap: exit', 2)
       case 'card':
         return c ? this.cardPage(c) : screen('Ack', 'Nothing waiting.', '', 2)
@@ -426,18 +412,14 @@ export class App {
       case 'heard':
         return screen(from, `"${v.text}"\n\n${v.a ? `→ ${rowLabel(v.a)}` : '→ Send it as a message'}`, 'Tap: yes   ·   Double tap: no')
       case 'bots': {
-        const w = this.wallet
         const from = v.from ?? 0
         const rest = v.bots.length - from - BOTS_PER_PAGE
         this.items = [
-          ...(w && !from ? [{ label: `Gram wallet · ${w.balance} GRAM`, run: () => this.go({ v: 'wallet' }) }] : []),
           ...v.bots.slice(from, from + BOTS_PER_PAGE).map(b => ({ label: b.name, run: () => void this.openBot(b) })),
           ...(rest > 0 ? [{ label: `More bots (${rest})`, run: () => this.go({ v: 'bots', bots: v.bots, from: from + BOTS_PER_PAGE }) }] : []),
         ]
         return listPage(from ? `Your bots · ${from + 1} to ${Math.min(from + BOTS_PER_PAGE, v.bots.length)}` : 'Your bots', this.items)
       }
-      case 'wallet':
-        return this.walletPage()
       case 'bot':
         this.items = [
           ...v.cards.map(c => ({ label: `${ago(this.d.now() - c.date)} · ${c.text.split('\n').find(l => l.trim()) ?? '(no text)'}`, run: () => this.show(c) })),
@@ -471,16 +453,6 @@ export class App {
       list: { name: 'acts', x: 0, y: H - listRows * ROW_H, w: W, h: listRows * ROW_H, items: this.items.map(i => i.label) },
       menu: MENU,
     }
-  }
-
-  /** Read-only: balance, address, last transfers. Amounts are shown digit for digit. */
-  private walletPage(): Page {
-    const w = this.wallet
-    if (!w) return screen('Gram wallet', 'No wallet on this account.', 'Tap: back')
-    const line = (t: WalletView['txs'][number]) =>
-      `${t.incoming ? '+' : '-'}${t.amount} ${t.incoming ? 'from' : 'to'} ${clean(t.peer)}${t.comment ? ` · ${clean(t.comment)}` : ''}${t.failed ? ' (failed)' : ''} · ${ago(this.d.now() - t.date)}`
-    const body = `${w.balance} GRAM   ${shortAddress(w.address)}\n\n${w.txs.length ? w.txs.map(line).join('\n') : 'No transfers yet.'}`
-    return screen('Gram wallet · read only', fit(body, W - 16, Math.floor((H - HEAD_H - FOOT_H) / LINE_H)).text, 'Tap: back')
   }
 
   private later() {
