@@ -139,7 +139,7 @@ async function startTelegram(firstPhone?: string, qr = false) {
     phone.status(`Connected · ${t.me?.displayName ?? ''}`, 'live')
     await t.scan()
     settingsFor(t)
-    } catch (e) {
+  } catch (e) {
     console.error('[ack] telegram', e)
     phone.status(errorText(e).split('\n')[0], 'warn')
     phone.showSignin('phone')
