@@ -30,7 +30,7 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
 - **Numbers stay exact.** Emoji the glasses can't draw become words (✅ becomes "OK") or disappear. Digits, prices, addresses and commands are never changed, and a test checks it.
 - **Buttons the lens can't run say so.** Links, Mini Apps and payments show "Finish on your phone" with the address. Copy buttons show their code, and disabled buttons are greyed.
 - **People too, without becoming a chat client.** Only the people you pick come to the glasses, in the same queue. You answer with your quick replies or by voice.
-- **Any chat from the lens, in a sidebar.** Tap the empty lens: your bots and the people, groups and channels you picked sit in sections on the left, and swiping moves through them while the chats of the chosen section show on the right. Tap opens a section, then a chat: its last messages come first, buttons or not (alerts, agent reports), with your quick replies for a person, then a bot's "/" menu: `/mybots`, `/deploy`, `/status`... The sidebar is also in the glasses menu of every card.
+- **Any chat from the lens, in a sidebar.** Tap the empty lens: your bots, people, groups and channels sit in sections on the left, the chats you picked first, and swiping moves through them while the chats of the chosen section show on the right. Tap opens a section, then a chat: its last messages come first, buttons or not (alerts, agent reports), with your quick replies for a person, then a bot's "/" menu: `/mybots`, `/deploy`, `/status`... The sidebar is also in the glasses menu of every card.
 - **Voice when it is faster.** Hold, speak, release: "deny it" presses Deny. Anything else is sent as a message once you confirm. Transcription uses your own Groq or OpenAI key, kept on your phone.
 - **A phone app in Even's own design language.** It follows Even's published app guidelines (colours, type scale, spacing, official pixel icons) and has three tabs:
   - **Lens**: the lens drawn to scale, which you can drive from the phone with tap, double tap and swipes when the glasses are not at hand, plus the log of every decision and the message-to-lens latency measured on every card.
@@ -92,7 +92,7 @@ Building from source: like the public repositories of iMe and Nicegram, this one
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 93 unit tests, production build, no API key in the repository
+npm run verify   # types, 94 unit tests, production build, no API key in the repository
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -136,20 +136,20 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 
 | What | Where |
 | --- | --- |
-| User account login over MTProto: phone, code and 2FA, or QR code (`auth.exportLoginToken`) | `src/telegram.ts:46-48` |
-| New, edited and deleted messages, live | `src/telegram.ts:51-53` |
-| Pending bot questions brought back on start, followed chats, and the phone's chat list (dialogs) | `src/telegram.ts:58`, `src/telegram.ts:77`, `src/telegram.ts:114` |
-| Chat history and read state (`messages.getHistory`, `messages.readHistory`), and read receipts for what the lens drew | `src/telegram.ts:122-123`, `src/telegram.ts:166` |
-| Profile photos for avatars (file download) | `src/telegram.ts:133` |
-| Press an inline button: `messages.getBotCallbackAnswer` | `src/telegram.ts:194` |
-| Reply keyboards, quick replies and messages: send text | `src/telegram.ts:198` |
-| Bot command menus (`botInfo.commands`) | `src/telegram.ts:227` |
-| Official sponsored messages in channels and bot chats (`messages.getSponsoredMessages`, `viewSponsoredMessage`, `clickSponsoredMessage`), as the Telegram API terms (3.3) require | `src/telegram.ts:145`, `src/telegram.ts:156`, `src/telegram.ts:170`, `src/phone.ts:447` |
-| Telegram Stars subscriptions read from the user's own account (`payments.getStarsSubscriptions`), for Ack+ | `src/telegram.ts:216`, `src/cards-from.ts:205`, `src/phone.ts:594` |
+| User account login over MTProto: phone, code and 2FA, or QR code (`auth.exportLoginToken`) | `src/telegram.ts:47-49` |
+| New, edited and deleted messages, live | `src/telegram.ts:52-54` |
+| Pending bot questions brought back on start, followed chats, and the phone's chat list (dialogs) | `src/telegram.ts:59`, `src/telegram.ts:78`, `src/telegram.ts:116` |
+| Chat history and read state (`messages.getHistory`, `messages.readHistory`), and read receipts for what the lens drew | `src/telegram.ts:124-125`, `src/telegram.ts:168` |
+| Profile photos for avatars (file download) | `src/telegram.ts:135` |
+| Press an inline button: `messages.getBotCallbackAnswer` | `src/telegram.ts:196` |
+| Reply keyboards, quick replies and messages: send text | `src/telegram.ts:200` |
+| Bot command menus (`botInfo.commands`) | `src/telegram.ts:234` |
+| Official sponsored messages in channels and bot chats (`messages.getSponsoredMessages`, `viewSponsoredMessage`, `clickSponsoredMessage`), as the Telegram API terms (3.3) require | `src/telegram.ts:147`, `src/telegram.ts:158`, `src/telegram.ts:172`, `src/phone.ts:447` |
+| Telegram Stars subscriptions read from the user's own account (`payments.getStarsSubscriptions`), for Ack+ | `src/telegram.ts:223`, `src/cards-from.ts:205`, `src/phone.ts:594` |
 | Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:83-86` |
 | Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:69-73` |
 | Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:91` |
-| Callback toasts and alerts | `src/app.ts:242` |
+| Callback toasts and alerts | `src/app.ts:243` |
 | Rich messages | `src/cards-from.ts:167` |
 
 ### Even Hub SDK features used
@@ -159,10 +159,10 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Text and list containers, one page system with header, body and gesture hints | `src/app.ts`, `src/glasses.ts:65` |
 | In-place text updates (`textContainerUpgrade`) when only texts change, else rebuild | `src/glasses.ts:137` |
 | Native list selection, swipe handled by firmware | `src/glasses.ts:36` |
-| Swipes read from a text container with event capture (`SCROLL_TOP` / `SCROLL_BOTTOM`) and brightness changed in place: the lens sidebar | `src/glasses.ts:42-43`, `src/app.ts:517` |
+| Swipes read from a text container with event capture (`SCROLL_TOP` / `SCROLL_BOTTOM`) and brightness changed in place: the lens sidebar | `src/glasses.ts:42-43`, `src/app.ts:520` |
 | Long press and release for voice (SDK 0.0.14+) | `src/glasses.ts:54` |
 | Ring vs temple source on taps | `src/glasses.ts:28` |
-| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:188` |
+| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:189` |
 | Text brightness levels (`textColor`) for hierarchy | `src/app.ts` |
 | Glasses microphone (`audioControl`) | `src/glasses.ts:145` |
 | Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:146` |

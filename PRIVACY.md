@@ -34,7 +34,7 @@ Only the card on screen, sent by the Even Realities App over Bluetooth. Even Rea
 
 ## Whose messages Ack shows
 
-Ack sees only what your Telegram account already sees. Bot messages come to the lens. Messages from people, groups and channels come only from the chats you switch on.
+Ack sees only what your Telegram account already sees. Bot messages come to the lens. Messages from people, groups and channels come only from the chats you switch on. When you tap the empty lens, it lists the names of your recent chats by kind, and a chat's messages show on the lens only once you open that chat there.
 
 ## AI
 

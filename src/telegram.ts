@@ -25,6 +25,7 @@ export class TelegramSource implements Source {
   private ads = new Map<number, { at: number; list: Promise<Sponsored[]> }>()
   private adsViewed = new Set<string>()
   private read = new Set<string>()
+  private dialogs = new Set<number>() // chats the account has a dialog with, not just senders seen in groups
   onActivity: (chatId: number) => void = () => {} // any new or edited message, so the phone can refresh an open chat
 
   constructor(
@@ -100,6 +101,7 @@ export class TelegramSource implements Source {
   /** Keeps a dialog in the recent list (with its photo for avatars) and returns its chat list row. */
   private remember(d: Dialog): ChatRow {
     const chat = this.chatOf(d.peer)
+    this.dialogs.add(chat.id)
     const m = d.lastMessage
     const text = m ? preview(this.named(m)).split('\n')[0] : ''
     return { ...chat, preview: m?.isOutgoing && text ? `You: ${text}` : text, date: m?.date.getTime() ?? 0, unread: d.unreadCount }
@@ -201,6 +203,11 @@ export class TelegramSource implements Source {
 
   async bots(): Promise<BotRef[]> {
     return this.list('bot').map(({ id, name }) => ({ id, name, kind: 'bot' as const }))
+  }
+
+  /** Every person, group and channel among the recent dialogs, most recent first, for the lens sidebar. */
+  async others(): Promise<BotRef[]> {
+    return [...this.recent.values()].filter(c => c.kind !== 'bot' && this.dialogs.has(c.id))
   }
 
   /** The people, groups and channels the user picked for the glasses, for the lens chat list. */

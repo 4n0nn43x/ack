@@ -2,7 +2,7 @@ import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { App, errorText, type LogEntry } from './app'
 import { DEFAULT_REPLIES, replies, type Card } from './cards'
 import { ACK_PLUS, inviteHash } from './cards-from'
-import { DEMO_PICKS, DemoSource } from './demo'
+import { DemoSource } from './demo'
 import { browserBridge, Glasses, parseEvent } from './glasses'
 import { Phone, type Saved } from './phone'
 import type { TelegramSource } from './telegram'
@@ -103,10 +103,6 @@ function settingsFor(s: DemoSource | TelegramSource) {
 
 function startDemo() {
   stop()
-  if (saved.mode !== 'demo') { // first start: the demo's person, group and channel come to the glasses (Leave resets it)
-    saved.people = [...new Set([...saved.people, ...DEMO_PICKS.people])]
-    saved.groups = [...new Set([...saved.groups, ...DEMO_PICKS.groups])]
-  }
   saved.mode = 'demo'
   save()
   const d = new DemoSource(take, () => replies(saved.replies), () => [...saved.people, ...saved.groups])

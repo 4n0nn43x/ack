@@ -299,9 +299,11 @@ describe('people', () => {
 })
 
 describe('bots and commands from the lens', () => {
-  it('tap on the empty lens lists bots, then their commands, then sends one', async () => {
+  it('tap on the empty lens opens the sidebar, then bots, their commands, and sends one', async () => {
     app.input({ type: 'click', ring: false })
     await flush()
+    expect(last().texts.map(x => x.text)).toContain('▶ Bots · 1') // the sidebar, even with one section
+    app.input({ type: 'click', ring: false })
     expect(last().list!.items).toEqual(['@BotFather'])
     app.input({ type: 'select', index: 0 })
     await flush()
@@ -368,6 +370,19 @@ describe('the lens sidebar: bots, people, groups, channels', () => {
     app.input({ type: 'select', index: 0 })
     await tick(UNDO_MS)
     expect(pressed).toEqual(['Yes'])
+  })
+
+  it('lists every recent chat by kind, the picked ones first, each once', async () => {
+    app.setSource({
+      ...source,
+      followed: async () => [{ id: 201, name: 'Alex', kind: 'person' }],
+      others: async () => [{ id: 202, name: 'Bob', kind: 'person' }, { id: 201, name: 'Alex', kind: 'person' }, { id: -9, name: 'News', kind: 'channel' }],
+    })
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(side().map(x => x.text)).toEqual(['▶ Bots · 1', 'People · 2', 'Channels · 1'])
+    app.input({ type: 'down' })
+    expect(right().text).toBe('Alex\nBob')
   })
 
   it('the sidebar hint fits on one line of the lens', () => {
@@ -466,6 +481,7 @@ describe('a bot opened from the lens', () => {
     app.setSource({ ...source, history: async () => msgs, commands: async () => [] })
     app.input({ type: 'click', ring: false })
     await flush()
+    app.input({ type: 'click', ring: false }) // Bots, from the sidebar
     app.input({ type: 'select', index: 0 })
     await flush()
     expect(last().texts[0].text).toBe('@BotFather')
@@ -479,6 +495,7 @@ describe('a bot opened from the lens', () => {
     app.setSource({ ...source, history: async () => [], commands: async () => [] })
     app.input({ type: 'click', ring: false })
     await flush()
+    app.input({ type: 'click', ring: false }) // Bots, from the sidebar
     app.input({ type: 'select', index: 0 })
     await flush()
     expect(lens()).toContain('No messages here yet.')
@@ -491,6 +508,7 @@ describe('a long bot list', () => {
     app.setSource({ ...source, bots: async () => many })
     app.input({ type: 'click', ring: false })
     await flush()
+    app.input({ type: 'click', ring: false })
     const first = last().list!.items
     expect(first).toHaveLength(19)
     expect(first[18]).toBe('More (7)')
@@ -499,6 +517,8 @@ describe('a long bot list', () => {
     expect(last().texts[0].text).toBe('Bots · 19 to 25')
     app.input({ type: 'double', ring: false })
     expect(last().list!.items[0]).toBe('Bot 0')
+    app.input({ type: 'double', ring: false })
+    expect(lens()).toContain('▶ Bots · 25')
     app.input({ type: 'double', ring: false })
     expect(lens()).toContain('Nothing waiting')
   })

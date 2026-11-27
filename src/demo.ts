@@ -71,8 +71,6 @@ const ALEX = 201
 const TEAM = 202 // a group
 const NEWS = 203 // a channel
 const OTHERS: { id: number; name: string; kind: ChatKind }[] = [{ id: ALEX, name: 'Alex', kind: 'person' }, { id: TEAM, name: 'Shop API team', kind: 'group' }, { id: NEWS, name: 'Ack News', kind: 'channel' }]
-/** The demo starts with its person, group and channel on the glasses, so every lens section has something. */
-export const DEMO_PICKS = { people: [ALEX], groups: [TEAM, NEWS] }
 // The opening sequence: when each bot speaks first (ms after the demo starts).
 const SCRIPT: [botId: number, screen: string, at: number][] = [[101, 'ask', 900], [102, 'ask', 7000], [ALEX, '', 15000], [103, 'ask', 24000], [105, 'ask', 40000]]
 
@@ -161,6 +159,7 @@ export class DemoSource implements Source {
 
   async bots(): Promise<BotRef[]> { return BOTS.map(b => ({ id: b.id, name: b.name, kind: 'bot' as const })) }
   async followed(): Promise<BotRef[]> { return OTHERS.filter(c => this.follow().includes(c.id)) }
+  async others(): Promise<BotRef[]> { return OTHERS }
 
   async chats(): Promise<ChatRow[]> {
     const last = (id: number) => this.logs.get(id)?.at(-1)

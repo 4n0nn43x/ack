@@ -15,6 +15,7 @@ export interface Source {
   send(chatId: number, text: string, replyTo?: number): Promise<void>
   bots(): Promise<BotRef[]>
   followed?(): Promise<BotRef[]> // the people, groups and channels the user picked for the glasses
+  others?(): Promise<BotRef[]> // every person, group and channel of the account's recent chats
   commands(botId: number): Promise<Command[]>
   history?(chatId: number): Promise<Bubble[]> // a chat's last messages, oldest first
 }
@@ -289,16 +290,18 @@ export class App {
   // ---- bots and commands -------------------------------------------------------
 
   /**
-   * Tap on the empty lens: every bot and every chat picked for the glasses, in a sidebar of sections
-   * (bots, people, groups, channels) that swipes move through. A single section opens straight away.
+   * Tap on the empty lens: the account's chats in a sidebar of sections (bots, people, groups, channels)
+   * that swipes move through, the chats picked for the glasses first in theirs.
    */
   private async openChats() {
-    const picked = (await this.source?.followed?.()) ?? []
-    const bots = ((await this.source?.bots()) ?? []).filter(b => !picked.some(p => p.id === b.id))
-    const all = [...picked, ...bots]
+    const seen = new Set<number>()
+    const all = [
+      ...(await this.source?.followed?.()) ?? [],
+      ...(await this.source?.bots()) ?? [],
+      ...(await this.source?.others?.()) ?? [],
+    ].filter(c => !seen.has(c.id) && seen.add(c.id))
     const sections = (Object.keys(SECTIONS) as ChatKind[]).map(kind => ({ kind, chats: all.filter(c => (c.kind ?? 'bot') === kind) })).filter(s => s.chats.length)
     if (!sections.length) return this.note('No chats yet.\nStart one in Telegram.', 'Ack')
-    if (sections.length === 1) return this.openSection(sections[0])
     this.go({ v: 'sections', sections, at: 0 })
   }
 
