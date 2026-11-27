@@ -560,7 +560,8 @@ export class Phone {
         <p class="hint">Hold on the glasses, speak, release. The key stays on this phone, and audio goes to that service only while you hold.</p>
       </div>
       <button id="save" class="btn dark">Save settings</button>
-      <button id="leave" class="btn warn">${icon('logout')}<span>${this.s.mode === 'demo' ? 'Leave the demo' : 'Sign out of Telegram'}</span></button>`
+      <button id="leave" class="btn warn">${icon('logout')}<span>${this.s.mode === 'demo' ? 'Leave the demo' : 'Sign out of Telegram'}</span></button>
+      <p class="hint pad">Leaving erases everything Ack keeps on this phone: the session, settings and decisions.</p>`
     for (const t of el.querySelectorAll<HTMLButtonElement>('[data-instant]')) t.onclick = () => {
       const id = Number(t.dataset.instant)
       const on = t.getAttribute('aria-checked') !== 'true'

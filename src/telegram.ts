@@ -214,7 +214,10 @@ export class TelegramSource implements Source {
     return (info?.commands ?? []).map(c => ({ command: c.command, description: clean(c.description) }))
   }
 
+  /** Ends the session on Telegram's side, then erases it from the phone (auth keys, cached names). */
   async signOut() {
     await this.tg.logOut().catch(() => {})
+    await this.tg.destroy().catch(() => {})
+    await new Promise(done => { const q = indexedDB.deleteDatabase('ack-session'); q.onsuccess = q.onerror = q.onblocked = done })
   }
 }

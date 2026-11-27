@@ -16,7 +16,8 @@ const store = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 // users only sign in. A build without it asks for the user's own API keys on the phone.
 const ENV_ID = (import.meta.env.VITE_TG_API_ID as string | undefined) ?? ''
 const ENV_HASH = (import.meta.env.VITE_TG_API_HASH as string | undefined) ?? ''
-const saved: Saved = { mode: 'none', apiId: '', apiHash: '', people: [], groups: [], replies: DEFAULT_REPLIES, instant: [], muted: {}, voice: { provider: 'groq', key: '' }, ...load<Partial<Saved>>('ack.v1', {}) }
+const fresh = (): Saved => ({ mode: 'none', apiId: '', apiHash: '', people: [], groups: [], replies: [...DEFAULT_REPLIES], instant: [], muted: {}, voice: { provider: 'groq', key: '' } })
+const saved: Saved = { ...fresh(), ...load<Partial<Saved>>('ack.v1', {}) }
 const log = load<LogEntry[]>('ack.log', [])
 const lat = load<number[]>('ack.latency', [])
 const save = () => store('ack.v1', saved)
@@ -149,8 +150,14 @@ async function leave() {
   const was = src
   stop()
   if (was?.kind === 'telegram') await was.signOut()
-  saved.mode = 'none'
-  save()
+  // Leaving erases everything Ack kept on this phone: settings, followed chats, keys, the decision log (PRIVACY.md).
+  for (const k of ['ack.v1', 'ack.log', 'ack.latency', 'ack.dismissed']) { try { localStorage.removeItem(k) } catch { /* nothing stored */ } }
+  Object.assign(saved, fresh())
+  log.length = 0
+  lat.length = 0
+  app.dismissed.clear()
+  phone.log(log)
+  phone.stats(lat)
   app.setSource(null)
   phone.status('Signed out')
   phone.signedOut()

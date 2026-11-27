@@ -174,7 +174,10 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 
 ## Privacy and safety
 
-- Your Telegram session stays in the Even app on your phone. Ack has no backend.
+The full policy, permission by permission, is in [PRIVACY.md](PRIVACY.md).
+
+- Your Telegram session stays in the Even app on your phone. Ack has no backend, no analytics and no tracking.
+- Signing out ends the session on Telegram's side and erases everything Ack keeps on the phone: session, settings and decision log.
 - Ack only sees what your account already sees. People's messages reach the glasses only for the chats you pick.
 - Ack follows Telegram's API terms: a message read on the lens is marked read in Telegram, as in any client (no ghost mode), and official sponsored messages appear, labelled, below a channel's posts and above bot chats on the phone, and after a channel post on the lens. Links outside Telegram ask before opening.
 - Each press can be undone for 1.5 s, and bots you trust can skip the countdown in settings. Buttons a bot marks dangerous, or whose label cannot be undone, always ask for confirmation, on the lens and on the phone.
