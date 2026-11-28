@@ -87,7 +87,7 @@ On Linux the simulator needs WebKitGTK: `sudo apt install libwebkit2gtk-4.1-0`.
 
    Then send it `/approve`, `/deploy` or `/trip`. You can also open `@BotFather` from the lens and run `/mybots`.
 
-On the glasses: `npm run pack` builds `ack.ehpk` (463 kB) for the Even Hub portal, and `assets/icon-24.png` is its store icon (`evenhub create ack.ehpk --icon assets/icon-24.png`), or run `evenhub qr --url http://<your-ip>:5173` and scan the QR with the Even app.
+On the glasses: `npm run pack` builds `ack.ehpk` (470 kB) for the Even Hub portal, and `assets/icon-24.png` is its store icon (`evenhub create ack.ehpk --icon assets/icon-24.png`), or run `evenhub qr --url http://<your-ip>:5173` and scan the QR with the Even app.
 
 Building from source: like the public repositories of iMe and Nicegram, this one holds no Telegram api_id. Get one at [my.telegram.org](https://my.telegram.org) ("API development tools") and put it in `.env.local` (copy `.env.example`; git ignores it). Vite injects it into your build. Without it, the Ack page asks for API keys before you sign in.
 
