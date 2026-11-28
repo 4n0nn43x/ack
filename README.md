@@ -92,7 +92,7 @@ Building from source: like the public repositories of iMe and Nicegram, this one
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 96 unit tests, production build, no API key in the repository
+npm run verify   # types, 97 unit tests, production build, no API key in the repository
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -149,7 +149,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:83-86` |
 | Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:69-73` |
 | Reply keyboard buttons (`keyboardButton`) | `src/cards.ts:91` |
-| Callback toasts and alerts | `src/app.ts:243` |
+| Callback toasts and alerts | `src/app.ts:244` |
 | Rich messages | `src/cards-from.ts:167` |
 
 ### Even Hub SDK features used
@@ -159,10 +159,10 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Text and list containers, one page system with header, body and gesture hints | `src/app.ts`, `src/glasses.ts:65` |
 | In-place text updates (`textContainerUpgrade`) when only texts change, else rebuild | `src/glasses.ts:137` |
 | Native list selection, swipe handled by firmware | `src/glasses.ts:36` |
-| Swipes read from a text container with event capture (`SCROLL_TOP` / `SCROLL_BOTTOM`) and brightness changed in place: the lens sidebar | `src/glasses.ts:42-43`, `src/app.ts:520` |
+| Swipes read from a text container with event capture (`SCROLL_TOP` / `SCROLL_BOTTOM`) and brightness changed in place: the lens sidebar | `src/glasses.ts:42-43`, `src/app.ts:528` |
 | Long press and release for voice (SDK 0.0.14+) | `src/glasses.ts:54` |
 | Ring vs temple source on taps | `src/glasses.ts:28` |
-| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:189` |
+| Contextual menu items (`menuObject`): mute, read all, clear | `src/glasses.ts:86`, `src/app.ts:190` |
 | Text brightness levels (`textColor`) for hierarchy | `src/app.ts` |
 | Glasses microphone (`audioControl`) | `src/glasses.ts:145` |
 | Root double tap opens the system exit dialog (`shutDownPageContainer(1)`) | `src/glasses.ts:146` |

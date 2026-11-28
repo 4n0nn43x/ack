@@ -91,6 +91,7 @@ export class App {
   private items: Item[] = []
   private flash = { key: '', text: '', until: 0 }
   private pressed: Pressed | null = null
+  private drawn: { key: string; listed: string; later: boolean } | null = null // the card page on the lens, if any
 
   constructor(private d: Deps, public settings: Settings) {}
 
@@ -420,6 +421,8 @@ export class App {
     const v = this.view
     const c = this.card
     const from = c?.from ?? 'Ack'
+    const drawn = this.drawn
+    this.drawn = null
     this.items = []
     switch (v.v) {
       case 'root':
@@ -427,7 +430,7 @@ export class App {
           ? screen('Ack', 'Nothing waiting.', 'Tap: your chats   ·   Double tap: exit', 2)
           : screen('Ack', 'Sign in to Telegram:\nopen Ack in the Even app\non your phone.', 'Tap: try the demo   ·   Double tap: exit', 2)
       case 'card':
-        return c ? this.cardPage(c) : screen('Ack', 'Nothing waiting.', '', 2)
+        return c ? this.cardPage(c, drawn) : screen('Ack', 'Nothing waiting.', '', 2)
       case 'read':
         return screen(from, c?.text ?? '', 'Swipe: scroll   ·   Tap: back')
       case 'confirm':
@@ -465,7 +468,7 @@ export class App {
     }
   }
 
-  private cardPage(c: Card): Page {
+  private cardPage(c: Card, drawn: App['drawn']): Page {
     const acts = order(c.actions.length ? c.actions : replies(['OK']).map(a => ({ ...a, kind: 'dismiss' as const })))
     const rows = Math.min(acts.length + 2, 3)
     const bodyH = H - HEAD_H - rows * ROW_H
@@ -474,7 +477,12 @@ export class App {
     this.items = acts.map(a => ({ label: rowLabel(a), run: () => this.choose(a) }))
     if (!c.isBot && !c.readOnly) this.items.push({ label: 'Reply by voice', run: () => this.listen() })
     if (body.cut) this.items.push({ label: 'Read all', run: () => this.go({ v: 'read' }) })
-    if (this.queue.length > 1) this.items.push({ label: `Later (${this.queue.length - 1} more)`, run: () => this.later() })
+    // A card queued behind this one must leave its list as it is: a new list rebuilds the page, and the glasses
+    // move the selection back to the first row. The queue count lives in the header, which updates in place.
+    const listed = this.items.map(i => i.label).join('\n')
+    const later = drawn?.key === c.key && drawn.listed === listed ? drawn.later : this.queue.length > 1
+    if (later) this.items.push({ label: 'Later', run: () => this.later() })
+    this.drawn = { key: c.key, listed, later }
     const listRows = Math.min(this.items.length, 3)
     const pos = this.queue.length > 1 ? `   1/${this.queue.length}` : ''
     const flash = this.flash.key === c.key && this.flash.until > this.d.now() ? this.flash.text : ''

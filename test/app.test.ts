@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { App, EDIT_WAIT_MS, SECTIONS_FOOT, UNDO_MS, type Deps, type LogEntry, type Source } from '../src/app'
 import { fit } from '../src/cards'
 import type { Action, Card } from '../src/cards'
-import type { Page } from '../src/glasses'
+import { layout, type Page } from '../src/glasses'
 
 let t = 1_000_000
 let timers: { at: number; fn: () => void; dead: boolean }[] = []
@@ -223,12 +223,24 @@ describe('a card', () => {
 })
 
 describe('queue', () => {
-  it('keeps order, counts, and Later rotates', () => {
+  it('a card arriving behind the one on the lens leaves its list alone, so the selection stays', () => {
+    app.upsert(card(1, [act('Allow once'), act('Always allow'), act('Deny')]))
+    const before = last()
+    app.upsert({ ...card(2, [act('B')]), key: '2:2', chatId: 2, from: '@other' })
+    app.upsert({ ...card(3, [act('C')]), key: '3:3', chatId: 3, from: '@third' })
+    expect(last().texts[0].text).toContain('1/3')
+    expect(last().list!.items).toEqual(before.list!.items)
+    expect(layout(last())).toBe(layout(before)) // same layout: the glasses update the header in place, no rebuild
+  })
+
+  it('keeps order, counts, and Later rotates once the lens draws the card again', () => {
     app.upsert(card(1, [act('A')]))
     app.upsert({ ...card(2, [act('B')]), key: '2:2', chatId: 2, from: '@other' })
     expect(last().texts[0].text).toContain('1/2')
+    app.input({ type: 'menu', id: 2 }) // Read all, then back to the card
+    app.input({ type: 'click', ring: false })
     const items = last().list!.items
-    expect(items.at(-1)).toBe('Later (1 more)')
+    expect(items.at(-1)).toBe('Later')
     app.input({ type: 'select', index: items.length - 1 })
     expect(app.card?.from).toBe('@other')
   })
@@ -258,10 +270,10 @@ describe('queue', () => {
     app.setSource(source)
     app.upsert(card(1, [act('A')]))
     await flush()
-    app.upsert(card(1, [act('A2')]))
+    app.upsert(card(2, [act('B')])) // queued behind card 1, whose list stays as it is
+    app.upsert(card(1, [act('A2')])) // the bot edits card 1: a new list, now with Later
     await flush()
     expect(seen).toEqual([120])
-    app.upsert(card(2, [act('B')]))
     app.input({ type: 'select', index: 1 }) // Later: card 2 reaches the lens after waiting in the queue
     await flush()
     expect(app.card?.msgId).toBe(2)
