@@ -367,7 +367,7 @@ export class App {
   private async say(text: string, a?: Action) {
     const c = this.card
     if (!c) return this.back()
-    if (a) return this.fire(a, c.key)
+    if (a) return this.choose(a) // same path as a tap: the undo countdown, an explicit yes for irreversible buttons
     this.go({ v: 'wait', a: { label: text, kind: 'text' } })
     try {
       await this.source!.send(c.chatId, text, c.replyTo)

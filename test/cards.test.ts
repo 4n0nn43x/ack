@@ -129,6 +129,12 @@ describe('voice match', () => {
     expect(match('what is the weather', acts)).toBeUndefined()
     expect(match('', acts)).toBeUndefined()
   })
+  it('never presses the opposite of what was said', () => {
+    expect(match("don't allow", acts)).toBeUndefined()
+    expect(match('do not deny', acts)).toBeUndefined()
+    expect(match('ne pas refuser', [{ label: 'Refuser', kind: 'callback' }])).toBeUndefined()
+    expect(match('no', [{ label: 'Yes', kind: 'callback' }, { label: 'No', kind: 'callback' }])?.label).toBe('No')
+  })
 })
 
 describe('presses that need an explicit yes', () => {

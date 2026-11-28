@@ -406,7 +406,7 @@ describe('voice', () => {
     expect(lens()).toContain('speech key')
   })
 
-  it('hold, speak, release: the phrase picks the button, tap confirms', async () => {
+  it('hold, speak, release: the phrase picks the button, tap confirms, the countdown still allows an undo', async () => {
     const mic: boolean[] = []
     app = new App(deps({ mic: on => mic.push(on), transcribe: async pcm => (pcm.length === 2 ? 'deny it' : '') }), { instant: [], muted: {}, replies: [] })
     app.setSource(source)
@@ -421,7 +421,27 @@ describe('voice', () => {
     expect(lens()).toContain('→ Deny')
     app.input({ type: 'click', ring: false })
     await flush()
+    expect(main()).toContain('Sending in')
+    expect(pressed).toEqual([])
+    await tick(UNDO_MS)
     expect(pressed).toEqual(['Deny'])
+  })
+
+  it('by voice too, a button that cannot be undone asks for an explicit yes', async () => {
+    app = new App(deps({ transcribe: async () => 'delete the bot' }), { instant: [], muted: {}, replies: [] })
+    app.setSource(source)
+    app.upsert(card(1, [act('Delete bot'), act('Cancel')]))
+    app.input({ type: 'longStart' })
+    app.input({ type: 'longEnd' })
+    await flush()
+    expect(main()).toContain('→ ▲ Delete bot')
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(lens()).toContain('cannot be undone')
+    expect(pressed).toEqual([])
+    app.input({ type: 'click', ring: false })
+    await flush()
+    expect(pressed).toEqual(['Delete bot'])
   })
 
   it('a phrase that is no button is sent as a message', async () => {

@@ -161,8 +161,21 @@ export function replies(list: string[]): Action[] {
 const ORDINALS: Record<string, number> = { first: 0, one: 0, premier: 0, second: 1, two: 1, deuxieme: 1, third: 2, three: 2, troisieme: 2 }
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N}%$.]+/gu, ' ').trim()
 
-/** Which button a spoken phrase means: exact or contained label, an ordinal, or the best word overlap (at least half). */
+// Words of a negation once norm() ran: "don't" becomes "don t", "n'efface" becomes "n efface".
+const NEGATION = new Set(['no', 'not', 'never', 'nope', 'dont', 't', 'non', 'ne', 'n', 'pas', 'jamais'])
+
+/**
+ * Which button a spoken phrase means. A negation the label does not carry means none, so "don't allow"
+ * never presses Allow: the phrase is offered as a message instead.
+ */
 export function match(spoken: string, actions: Action[]): Action | undefined {
+  const a = closest(spoken, actions)
+  const label = a ? norm(a.label).split(' ') : []
+  return a && norm(spoken).split(' ').some(w => NEGATION.has(w) && !label.includes(w)) ? undefined : a
+}
+
+/** The closest button: exact or contained label, an ordinal, or the best word overlap (at least half). */
+function closest(spoken: string, actions: Action[]): Action | undefined {
   const s = norm(spoken)
   if (!s || !actions.length) return undefined
   const labels = actions.map(a => norm(a.label))

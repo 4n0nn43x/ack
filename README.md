@@ -29,7 +29,7 @@ On Even G2, those messages only arrive as read-only notifications. To press "All
   - Danger buttons are always listed last.
 - **Numbers stay exact.** Emoji the glasses can't draw become words (✅ becomes "OK") or disappear. Digits, prices, addresses and commands are never changed, and a test checks it.
 - **Buttons the lens can't run say so.** Links, Mini Apps and payments show "Finish on your phone" with the address. Copy buttons show their code, and disabled buttons are greyed.
-- **People too, without becoming a chat client.** Only the people you pick come to the glasses, in the same queue. You answer with your quick replies or by voice.
+- **People too, without becoming a chat client.** Only the people you pick come to the glasses on their own, in the same queue. You answer with your quick replies or by voice.
 - **Any chat from the lens, in a sidebar.** Tap the empty lens: your bots, people, groups and channels sit in sections on the left, the chats you picked first, and swiping moves through them while the chats of the chosen section show on the right. Tap opens a section, then a chat: its last messages come first, buttons or not (alerts, agent reports), with your quick replies for a person, then a bot's "/" menu: `/mybots`, `/deploy`, `/status`... The sidebar is also in the glasses menu of every card.
 - **Voice when it is faster.** Hold, speak, release: "deny it" presses Deny. Anything else is sent as a message once you confirm. Transcription uses your own Groq or OpenAI key, kept on your phone.
 - **A phone app in Even's own design language.** It follows Even's published app guidelines (colours, type scale, spacing, official pixel icons) and has three tabs:
@@ -92,7 +92,7 @@ Building from source: like the public repositories of iMe and Nicegram, this one
 ## Verify in 5 minutes
 
 ```bash
-npm run verify   # types, 94 unit tests, production build, no API key in the repository
+npm run verify   # types, 96 unit tests, production build, no API key in the repository
 npm run e2e      # 9 checks on the real Even Hub simulator (start it with ?fresh and --automation-port 9898)
 ```
 
@@ -144,7 +144,7 @@ No Ack server sits in between. The WebView talks to Telegram's web endpoints (`w
 | Press an inline button: `messages.getBotCallbackAnswer` | `src/telegram.ts:196` |
 | Reply keyboards, quick replies and messages: send text | `src/telegram.ts:200` |
 | Bot command menus (`botInfo.commands`) | `src/telegram.ts:234` |
-| Official sponsored messages in channels and bot chats (`messages.getSponsoredMessages`, `viewSponsoredMessage`, `clickSponsoredMessage`), as the Telegram API terms (3.3) require | `src/telegram.ts:147`, `src/telegram.ts:158`, `src/telegram.ts:172`, `src/phone.ts:447` |
+| Official sponsored messages in channels and bot chats (`messages.getSponsoredMessages`, `viewSponsoredMessage`, `clickSponsoredMessage`), as the Telegram API terms (3.3) require | `src/telegram.ts:147`, `src/telegram.ts:158`, `src/telegram.ts:172`, `src/phone.ts:457` |
 | Telegram Stars subscriptions read from the user's own account (`payments.getStarsSubscriptions`), for Ack+ | `src/telegram.ts:223`, `src/cards-from.ts:205`, `src/phone.ts:594` |
 | Layer 233 inline buttons: callback, copy, disabled, url, web app, password | `src/cards.ts:83-86` |
 | Bot API 9.4 button `style` (danger, success, primary) | `src/cards.ts:69-73` |
@@ -182,7 +182,7 @@ The full policy, permission by permission, is in [PRIVACY.md](PRIVACY.md).
 
 - Your Telegram session stays in the Even app on your phone. Ack has no backend, no analytics and no tracking.
 - Signing out ends the session on Telegram's side and erases everything Ack keeps on the phone: session, settings and decision log.
-- Ack only sees what your account already sees. People's messages reach the glasses only for the chats you pick.
+- Ack only sees what your account already sees. People's messages come to the glasses on their own only from the chats you pick; any other chat shows there only when you open it from the lens.
 - Ack follows Telegram's API terms: a message read on the lens is marked read in Telegram, as in any client (no ghost mode), and official sponsored messages appear, labelled, below a channel's posts and above bot chats on the phone, and after a channel post on the lens. Links outside Telegram ask before opening.
 - Each press can be undone for 1.5 s, and bots you trust can skip the countdown in settings. Buttons a bot marks dangerous, or whose label cannot be undone, always ask for confirmation, on the lens and on the phone.
 - Voice audio is captured only while you hold. It goes straight from your phone to the transcription service you chose, with your own key.
